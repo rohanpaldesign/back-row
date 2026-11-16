@@ -1,0 +1,11 @@
+{
+  "name": "back-row",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "forwardPorts": [8080],
+  "postAttachCommand": "echo 'Static site. Serve it with: python -m http.server 8080'",
+  "customizations": {
+    "vscode": {
+      "extensions": ["esbenp.prettier-vscode"]
+    }
+  }
+}

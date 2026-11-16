@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Back Row</title>
+  <meta name="description" content="See your slides and screen share the way your audience does: from the back of a bright room, or in a 720p call tile.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    try { var t = localStorage.getItem('backrow:theme'); if (t) document.documentElement.dataset.theme = JSON.parse(t); } catch (e) {}
+  </script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="./">Back Row</a>
+    <span class="tag">Can they read it from there?</span>
+    <button id="themeBtn" class="icon-btn" type="button" aria-label="Switch light or dark">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 0 18V3z"/><circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <section id="empty" class="empty">
+      <div class="drop" id="dropZone">
+        <svg class="seats" viewBox="0 0 240 120" aria-hidden="true">
+          <rect x="60" y="6" width="120" height="44" rx="4" class="screen"/>
+          <rect x="72" y="16" width="62" height="7" rx="2" class="line"/>
+          <rect x="72" y="29" width="44" height="4" rx="2" class="line faint"/>
+          <rect x="72" y="37" width="52" height="4" rx="2" class="line faint"/>
+          <g class="row"><circle cx="96" cy="70" r="6"/><circle cx="120" cy="70" r="6"/><circle cx="144" cy="70" r="6"/></g>
+          <g class="row r2"><circle cx="72" cy="88" r="6"/><circle cx="96" cy="88" r="6"/><circle cx="120" cy="88" r="6"/><circle cx="144" cy="88" r="6"/><circle cx="168" cy="88" r="6"/></g>
+          <g class="row r3"><circle cx="48" cy="106" r="6"/><circle cx="72" cy="106" r="6"/><circle cx="96" cy="106" r="6"/><circle cx="120" cy="106" r="6"/><circle cx="144" cy="106" r="6"/><circle cx="168" cy="106" r="6"/><circle cx="192" cy="106" r="6" class="you"/></g>
+        </svg>
+        <h1>See your slides from the back row</h1>
+        <p class="lede">Drop slides, a PDF or a screenshot. Pick where your audience sits, in the room or on a call, and see what they actually see.</p>
+        <div class="actions">
+          <label class="btn primary">Choose files<input id="fileInput" type="file" accept="image/*,application/pdf" multiple hidden></label>
+          <button class="btn" id="sampleBtn" type="button">Try a sample</button>
+        </div>
+        <p class="hint">You can also paste an image. Nothing leaves your device.</p>
+      </div>
+    </section>
+
+    <section id="work" class="work" hidden>
+      <aside class="panel">
+        <div class="seg" id="modeSeg">
+          <button type="button" data-mode="room">In the room</button>
+          <button type="button" data-mode="call">On a call</button>
+        </div>
+
+        <div id="roomCtl">
+          <fieldset><legend>Screen</legend><div class="chips" id="screenChips"></div></fieldset>
+          <fieldset>
+            <legend>Seat</legend>
+            <div class="chips" id="seatChips"></div>
+            <div class="range">
+              <input type="range" id="distRange" min="1" max="20" step="0.5" aria-label="Distance from the screen in metres">
+              <output id="distOut" for="distRange"></output>
+            </div>
+          </fieldset>
+          <fieldset><legend>Room light</legend><div class="chips" id="lightChips"></div></fieldset>
+        </div>
+
+        <div id="callCtl" hidden>
+          <fieldset><legend>They receive</legend><div class="chips" id="recvChips"></div></fieldset>
+          <fieldset><legend>Watching on</legend><div class="chips" id="viewerChips"></div></fieldset>
+          <fieldset><legend>Screenshot scale</legend><div class="chips" id="scaleChips"></div></fieldset>
+        </div>
+
+        <fieldset>
+          <legend>Show</legend>
+          <label class="check"><input type="checkbox" id="overlayChk"> Highlight problem areas</label>
+          <label class="check"><input type="checkbox" id="fitChk"> Fit to window</label>
+        </fieldset>
+
+        <div class="calib"><span id="calibStatus"></span> <button class="link" id="calibBtn" type="button">Calibrate</button></div>
+
+        <div class="panel-actions">
+          <label class="btn small">Add files<input id="fileInput2" type="file" accept="image/*,application/pdf" multiple hidden></label>
+          <button class="btn small" id="clearBtn" type="button">Start over</button>
+        </div>
+      </aside>
+
+      <div class="stage">
+        <div class="verdict" id="verdict" aria-live="polite"></div>
+        <div class="viewbar">
+          <div class="seg compact" id="viewSeg">
+            <button type="button" data-view="audience">Audience</button>
+            <button type="button" data-view="original">Original</button>
+            <button type="button" data-view="split">Split</button>
+          </div>
+          <div class="legend" id="legend"><span><i class="dot small"></i>Too small</span><span><i class="dot faint"></i>Too faint</span></div>
+        </div>
+        <div class="frame-outer">
+          <div class="frame" id="frame">
+            <div class="wrap" id="wrap">
+              <canvas id="origCv"></canvas>
+              <canvas id="audCv"></canvas>
+              <canvas id="ovCv"></canvas>
+              <span class="side-tag left" id="tagL" hidden>Original</span>
+              <span class="side-tag right" id="tagR" hidden>Audience</span>
+              <div class="divider" id="divider" hidden></div>
+              <input type="range" id="splitRange" min="0" max="100" value="50" aria-label="Split position" hidden>
+            </div>
+          </div>
+          <div class="busy" id="busy" hidden>Working…</div>
+        </div>
+        <p class="note" id="sizeNote"></p>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">Runs entirely in your browser. Nothing you add is uploaded.</footer>
+
+  <dialog id="calibDlg">
+    <form method="dialog" class="calib-form">
+      <h2>Match a card</h2>
+      <p>Hold a credit card or ID card upright against your screen. Drag until the outline is exactly as wide as the card.</p>
+      <div class="card-stage"><div class="card" id="card"><span></span></div></div>
+      <input type="range" id="cardRange" min="120" max="380" step="1" aria-label="Card width">
+      <div class="dlg-actions">
+        <button value="cancel" class="btn">Cancel</button>
+        <button value="save" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="dropveil" id="dropVeil" hidden><span>Drop to add</span></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
