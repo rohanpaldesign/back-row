@@ -22,13 +22,13 @@
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="3.5" width="18" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="17" cy="18.5" r="1.7" fill="#ff4d3d"/></svg>
         <span class="wordmark">Back Row</span>
       </a>
-      <div class="tabs" role="group" aria-label="Where the audience watches">
+      <div class="tabs" id="modeTabs" role="group" aria-label="Where the audience watches">
         <button class="tab" type="button" data-mode="room" data-tip="Watch from a seat in a room, on a TV or a projector"><span>In the room</span></button>
         <button class="tab" type="button" data-mode="call" data-tip="Watch as a screen share in a video call"><span>On a call</span></button>
       </div>
       <span class="spacer"></span>
       <label class="navbtn" id="navAdd" data-tip="Add slides: images or a PDF. You can also drop or paste them anywhere."><span>Add slides</span><input id="fileInput2" type="file" accept="image/*,application/pdf" multiple hidden></label>
-      <button class="navbtn" type="button" id="navSample" data-tip="Load a sample slide with text from 48px down to 12px"><span>Sample</span></button>
+      <button class="navbtn" type="button" id="navSample" data-tip="Load an example slide with text from 48px down to 12px"><span>Example</span></button>
       <button class="navbtn icon-only" type="button" id="themeBtn" aria-label="Switch light or dark" data-tip="Switch between light and dark"></button>
     </nav>
 
@@ -41,12 +41,12 @@
           <p class="lede">Drop your slides or a screenshot. Take a seat at the back of the room, or join the call on a phone, and see exactly what your audience sees.</p>
           <div class="actions">
             <label class="btn primary">Choose files<input id="fileInput" type="file" accept="image/*,application/pdf" multiple hidden></label>
-            <button class="btn ghost" id="sampleBtn" type="button">Try a sample</button>
           </div>
           <form class="linkform" id="linkForm">
             <input id="linkInput" type="url" inputmode="url" placeholder="Or paste a Google Slides, PDF or image link" aria-label="Link to slides">
             <button class="btn primary" type="submit">Open</button>
           </form>
+          <button class="link example-link" id="sampleBtn" type="button">Try an example</button>
         </article>
         <article class="card dark span-4 dropcard" id="dropZone">
           <span class="label">Drop zone</span>
@@ -109,15 +109,25 @@
           <div class="busy mono" id="busy" hidden>Working…</div>
         </article>
 
-        <article class="card result-card" id="resultCard" aria-live="polite"></article>
 
         <!-- Room controls -->
+        <div class="side">
+        <article class="card result-card ctl" id="resultCard" data-key="result"><div class="ctl-head"><span class="label">Smallest readable text</span></div><div class="result-body" id="resultBody" aria-live="polite"></div></article>
         <article class="card ctl primary room-only" id="seatCard">
           <div class="ctl-head"><span class="label">Where you sit</span></div>
           <div class="seat-read"><span class="midnum" id="seatDist">9 m</span><span class="muted" id="seatRows"></span></div>
           <div class="seatmap" id="seatMap"><div class="seatmap-screen">Screen</div><div id="seatRowsEl"></div></div>
           <div class="seatkey muted small"><span><i class="k you"></i>You</span><span><i class="k taken"></i>Someone sitting</span><span><i class="k"></i>Empty</span></div>
         </article>
+        <article class="card ctl primary call-only">
+          <div class="ctl-head"><span class="label">Watching on</span></div>
+          <div class="tiles three" id="deviceTiles"></div>
+          <div class="ctl-head sub"><span class="label">App</span></div>
+          <div class="tiles two" id="appTiles"></div>
+          <div class="ctl-head sub" id="layoutHead"><span class="label" data-tip="Speaker: participants in a strip. Side-by-side: participants in a panel next to the shared screen, which makes it smaller." tabindex="0">View ⓘ</span></div>
+          <div class="seg wide" id="layoutSeg"></div>
+        </article>
+        </div>
         <article class="card ctl half room-only">
           <div class="ctl-head"><span class="label">Screen</span></div>
           <div class="tiles four" id="screenTiles"></div>
@@ -128,14 +138,6 @@
         </article>
 
         <!-- Call controls -->
-        <article class="card ctl primary call-only">
-          <div class="ctl-head"><span class="label">Watching on</span></div>
-          <div class="tiles three" id="deviceTiles"></div>
-          <div class="ctl-head sub"><span class="label">App</span></div>
-          <div class="tiles two" id="appTiles"></div>
-          <div class="ctl-head sub" id="layoutHead"><span class="label" data-tip="Speaker: participants in a strip. Side-by-side: participants in a panel next to the shared screen, which makes it smaller." tabindex="0">View ⓘ</span></div>
-          <div class="seg wide" id="layoutSeg"></div>
-        </article>
         <article class="card ctl half call-only">
           <div class="ctl-head"><span class="label" data-tip="The resolution your share arrives at. Calls drop resolution and compress harder on weak connections." tabindex="0">They receive ⓘ</span></div>
           <div class="tiles three" id="recvTiles"></div>
