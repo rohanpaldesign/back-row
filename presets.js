@@ -20,13 +20,9 @@ export const SEAT_GAP = 0.6;
 export const RAKE = 0.08; // each row sits this much higher than the one in front
 export const EYE_HEIGHT = 1.2; // seated eye height
 
-// How full the room is. Occupancy is fixed per seat, so the seat map and the
+// The room is nearly full. Occupancy is fixed per seat, so the seat map and the
 // heads drawn in the scene always agree.
-export const CROWDS = [
-  { id: 'full', label: 'Packed', fill: 0.92 },
-  { id: 'half', label: 'Half full', fill: 0.5 },
-  { id: 'sparse', label: 'Sparse', fill: 0.2 },
-];
+const CROWD_FILL = 0.9;
 function seatHash(row, col) {
   let h = Math.imul(row + 101, 0x2c1b3c6d) ^ Math.imul(col + 37, 0x297a2d39);
   h ^= h >>> 15;
@@ -34,7 +30,7 @@ function seatHash(row, col) {
   h ^= h >>> 13;
   return (h >>> 0) / 4294967296;
 }
-export const seatTaken = (row, col, fill) => seatHash(row, col) < fill;
+export const seatTaken = (row, col) => seatHash(row, col) < CROWD_FILL;
 
 export const seatDistance = (row) => FIRST_ROW + row * ROW_GAP;
 // Rows are staggered a quarter seat left and right so heads don't line up.

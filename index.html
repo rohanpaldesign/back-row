@@ -16,38 +16,27 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <nav class="rail" aria-label="Tools">
-    <a class="rail-logo" href="./" aria-label="Back Row home">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="3.5" width="18" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="17" cy="18.5" r="1.7" fill="#ff4d3d"/></svg>
-    </a>
-    <span class="rail-sep"></span>
-    <button class="rail-btn" type="button" data-mode="room" aria-label="In the room" title="In the room"></button>
-    <button class="rail-btn" type="button" data-mode="call" aria-label="On a call" title="On a call"></button>
-    <span class="rail-sep"></span>
-    <label class="rail-btn" title="Add slides" aria-label="Add slides" id="railAdd"><input id="fileInput2" type="file" accept="image/*,application/pdf" multiple hidden></label>
-    <button class="rail-btn" type="button" id="railSample" aria-label="Load the sample slide" title="Sample slide"></button>
-    <button class="rail-btn" type="button" id="themeBtn" aria-label="Switch light or dark" title="Light or dark"></button>
-  </nav>
-
   <div class="shell">
-    <header class="top">
-      <div class="brand">
+    <nav class="nav" aria-label="Back Row">
+      <a class="brand" href="./" aria-label="Back Row home">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="3.5" width="18" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="17" cy="18.5" r="1.7" fill="#ff4d3d"/></svg>
         <span class="wordmark">Back Row</span>
-        <span class="crumb" id="crumb">Can they read it from there?</span>
+      </a>
+      <div class="tabs" role="group" aria-label="Where the audience watches">
+        <button class="tab" type="button" data-mode="room" data-tip="Watch from a seat in a room, on a TV or a projector"><span>In the room</span></button>
+        <button class="tab" type="button" data-mode="call" data-tip="Watch as a screen share in a video call"><span>On a call</span></button>
       </div>
-      <div class="slidenav" id="slideNav" hidden>
-        <span class="slidename" id="slideName"></span>
-        <span class="mono counter" id="slideCount">01/01</span>
-        <button class="round" type="button" id="prevBtn" aria-label="Previous slide"></button>
-        <button class="round" type="button" id="nextBtn" aria-label="Next slide"></button>
-      </div>
-    </header>
+      <span class="spacer"></span>
+      <label class="navbtn" id="navAdd" data-tip="Add slides: images or a PDF. You can also drop or paste them anywhere."><span>Add slides</span><input id="fileInput2" type="file" accept="image/*,application/pdf" multiple hidden></label>
+      <button class="navbtn" type="button" id="navSample" data-tip="Load a sample slide with text from 48px down to 12px"><span>Sample</span></button>
+      <button class="navbtn icon-only" type="button" id="themeBtn" aria-label="Switch light or dark" data-tip="Switch between light and dark"></button>
+    </nav>
 
     <main>
       <!-- Empty state -->
       <section id="empty" class="bento">
         <article class="card hero sky span-8">
-          <span class="label">Back Row · slide check</span>
+          <span class="label">Slide check</span>
           <h1>Can they read it from there?</h1>
           <p class="lede">Drop your slides or a screenshot. Take a seat at the back of the room, or join the call on a phone, and see exactly what your audience sees.</p>
           <div class="actions">
@@ -91,68 +80,68 @@
       </section>
 
       <!-- Workspace -->
+      <div class="context" id="context" hidden>
+        <h1 class="slidename" id="slideName"></h1>
+        <span class="crumb" id="crumb"></span>
+      </div>
       <section id="work" class="bento work" hidden>
         <article class="card scene-card" id="sceneCard">
           <div class="scene-top">
             <div class="seg" id="viewSeg">
-              <button type="button" data-view="audience">Audience</button>
-              <button type="button" data-view="original">Original</button>
+              <button type="button" data-view="audience" data-tip="What your audience sees from here: blurred by distance, washed out by light or video compression">Audience</button>
+              <button type="button" data-view="original" data-tip="Your slide exactly as you made it, in the same spot, to compare">Original</button>
             </div>
-            <span class="pill mono" id="lifePill">Life size</span>
+            <span class="pill mono" id="lifePill" tabindex="0" data-tip="Drawn at the size it really looks, for you sitting about 60 cm from this screen. Calibrate under Slides for a precise match.">Life size</span>
           </div>
           <div class="viewport" id="viewport"><div class="scene" id="scene"><canvas id="roomCv"></canvas><div class="callhost" id="callHost"></div></div></div>
           <div class="scene-bottom">
             <span class="hint" id="panHint">Drag to look around</span>
             <span class="spacer"></span>
             <div class="scenenav" id="sceneNav" hidden>
-              <button class="round glass" type="button" id="scenePrev" aria-label="Previous slide"></button>
+              <button class="round glass" type="button" id="scenePrev" aria-label="Previous slide" data-tip="Previous slide (left arrow key)"></button>
               <span class="mono" id="sceneCount">01/01</span>
-              <button class="round glass" type="button" id="sceneNext" aria-label="Next slide"></button>
+              <button class="round glass" type="button" id="sceneNext" aria-label="Next slide" data-tip="Next slide (right arrow key)"></button>
             </div>
             <span class="spacer"></span>
-            <button class="round glass" type="button" id="overlayBtn" aria-pressed="true" title="Highlight problem areas" aria-label="Highlight problem areas"></button>
-            <button class="round glass" type="button" id="fitBtn" aria-pressed="false" title="Fit to card" aria-label="Fit to card"></button>
+            <button class="round glass" type="button" id="overlayBtn" aria-pressed="true" aria-label="Highlight problem areas"></button>
+            <button class="round glass" type="button" id="fitBtn" aria-pressed="false" aria-label="Fit or life size"></button>
           </div>
           <div class="busy mono" id="busy" hidden>Working…</div>
         </article>
 
-        <article class="card verdict-card" id="verdictCard" aria-live="polite"></article>
-        <article class="card stat sky" id="statSmall"></article>
-        <article class="card stat dark" id="statFaint"></article>
-        <article class="card stat peach" id="statThird"></article>
+        <article class="card result-card" id="resultCard" aria-live="polite"></article>
 
         <!-- Room controls -->
-        <article class="card ctl room-only" id="seatCard">
+        <article class="card ctl primary room-only" id="seatCard">
           <div class="ctl-head"><span class="label">Where you sit</span></div>
-          <div class="seat-read"><span class="bignum" id="seatDist">9 m</span><span class="muted" id="seatRows"></span></div>
+          <div class="seat-read"><span class="midnum" id="seatDist">9 m</span><span class="muted" id="seatRows"></span></div>
           <div class="seatmap" id="seatMap"><div class="seatmap-screen">Screen</div><div id="seatRowsEl"></div></div>
           <div class="seatkey muted small"><span><i class="k you"></i>You</span><span><i class="k taken"></i>Someone sitting</span><span><i class="k"></i>Empty</span></div>
-          <div class="seg wide" id="crowdSeg" aria-label="How full the room is"></div>
         </article>
-        <article class="card ctl room-only">
+        <article class="card ctl half room-only">
           <div class="ctl-head"><span class="label">Screen</span></div>
-          <div class="tiles two" id="screenTiles"></div>
+          <div class="tiles four" id="screenTiles"></div>
         </article>
-        <article class="card ctl room-only">
+        <article class="card ctl half room-only">
           <div class="ctl-head"><span class="label">Room light</span></div>
           <div class="tiles three" id="lightTiles"></div>
         </article>
 
         <!-- Call controls -->
-        <article class="card ctl call-only">
-          <div class="ctl-head"><span class="label">App</span></div>
-          <div class="tiles two" id="appTiles"></div>
-          <div class="ctl-head sub" id="layoutHead"><span class="label">View</span></div>
-          <div class="seg wide" id="layoutSeg"></div>
-        </article>
-        <article class="card ctl call-only">
+        <article class="card ctl primary call-only">
           <div class="ctl-head"><span class="label">Watching on</span></div>
           <div class="tiles three" id="deviceTiles"></div>
+          <div class="ctl-head sub"><span class="label">App</span></div>
+          <div class="tiles two" id="appTiles"></div>
+          <div class="ctl-head sub" id="layoutHead"><span class="label" data-tip="Speaker: participants in a strip. Side-by-side: participants in a panel next to the shared screen, which makes it smaller." tabindex="0">View ⓘ</span></div>
+          <div class="seg wide" id="layoutSeg"></div>
         </article>
-        <article class="card ctl call-only">
-          <div class="ctl-head"><span class="label">They receive</span></div>
+        <article class="card ctl half call-only">
+          <div class="ctl-head"><span class="label" data-tip="The resolution your share arrives at. Calls drop resolution and compress harder on weak connections." tabindex="0">They receive ⓘ</span></div>
           <div class="tiles three" id="recvTiles"></div>
-          <div class="ctl-head sub"><span class="label">Screenshot scale</span></div>
+        </article>
+        <article class="card ctl half call-only">
+          <div class="ctl-head"><span class="label" data-tip="Screenshots from Retina and other high-DPI screens are 2x: everything is twice as many pixels. Auto guesses from the width." tabindex="0">Screenshot scale ⓘ</span></div>
           <div class="seg wide" id="scaleSeg"></div>
         </article>
 
@@ -161,9 +150,9 @@
             <span class="label">Slides</span>
             <span class="spacer"></span>
             <span class="muted small" id="calibStatus"></span>
-            <button class="link" id="calibBtn" type="button">Calibrate</button>
-            <button class="btn small ghost" id="copyLinkBtn" type="button" hidden>Copy link</button>
-            <button class="btn small ghost" id="clearBtn" type="button">Start over</button>
+            <button class="link" id="calibBtn" type="button" data-tip="Match a credit card on screen so life size is exact on this display">Calibrate</button>
+            <button class="btn small ghost" id="copyLinkBtn" type="button" hidden data-tip="Copy a Back Row link that opens this deck at this slide">Copy link</button>
+            <button class="btn small ghost" id="clearBtn" type="button" data-tip="Remove all slides">Start over</button>
           </div>
           <form class="linkform compact" id="linkForm2">
             <input id="linkInput2" type="url" inputmode="url" placeholder="Add from a Google Slides, PDF or image link" aria-label="Link to more slides">
@@ -174,7 +163,6 @@
       </section>
     </main>
 
-    <footer class="foot">Runs entirely in your browser. Nothing you add is uploaded.</footer>
   </div>
 
   <dialog id="calibDlg">

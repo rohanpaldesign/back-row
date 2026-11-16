@@ -7,13 +7,13 @@ A small, static web app: drop slides (images, PDF, a Google Slides link) or a sc
 - The only third-party code is pdf.js 3.11.174 from cdnjs, loaded lazily in `app.js` when a PDF is added. Fonts (Inter, Inter Tight, JetBrains Mono) come from Google Fonts. Pin exact versions for anything new.
 - Call windows are generic look-alikes: never use Zoom or Microsoft logos, names in the UI chrome, or brand assets. Label them "Zoom-style" and "Teams-style".
 - Copy: no em dashes.
-- Bento UI: big numbers, 28px cards, light and dark themes via tokens in `styles.css` (`:root`, `prefers-color-scheme`, `[data-theme]`). Must work at 390px wide with no horizontal page scroll.
+- UI: horizontal top nav (wordmark, mode tabs, Add/Sample/Theme); one compact results card, not giant stat cards; every icon or unclear control has a `data-tip` tooltip (custom, not `title`). Big numbers only where they earn it, 28px cards, light and dark themes via tokens in `styles.css` (`:root`, `prefers-color-scheme`, `[data-theme]`). Must work at 390px wide with no horizontal page scroll.
 
 ## Files
-- `presets.js`: every physical constant: screens (with centre heights), room geometry (rows, seat spacing, rake, eye height), `CROWDS` + `seatTaken()` (the one seating chart shared by the seat map and the scene), light levels, call profiles, devices, and `stageBox()` (call window layout fractions used by both the CSS layout and `physical()`).
+- `presets.js`: every physical constant: screens (with centre heights), room geometry (rows, seat spacing, rake, eye height), `seatTaken()` (the one fixed, nearly full seating chart shared by the seat map and the scene), light levels, call profiles, devices, and `stageBox()` (call window layout fractions used by both the CSS layout and `physical()`).
 - `simulate.js`: `simulate(src, cfg)` returns `{degraded, sizeOnly, theta, eye}`; `physical()` gives the slide's physical width and viewing distance; `resample()` is the high-quality resize used everywhere.
 - `legibility.js`: `analyze()` compares the slide with what the viewer perceives (Gaussian eye blur), cell by cell; `minReadable()` gives the smallest readable font size from the viewing angle.
-- `scene-room.js`: `renderRoom()` draws the first-person pinhole view from the seat (wall, screen, slide, overlay, people in painter's order).
+- `scene-room.js`: `renderRoom()` draws the first-person pinhole view from the seat inside a 3D room box (side walls, ceiling lights, raked floor, door + exit sign, lectern, ceiling projector and beam, seat backs, people with depth of field), far to near.
 - `scene-call.js`: `renderCall()` builds the device frame and call window DOM and paints the shared screen canvas.
 - `icons.js`: inline SVG icons. `sample.js`: the built-in test slide.
 - `app.js`: input (drop, paste, file, PDF, links + `#src=` hash), state (localStorage under `backrow:`), seat map, cards, drag-to-pan, thumbnails, calibration.
@@ -24,4 +24,4 @@ A small, static web app: drop slides (images, PDF, a Google Slides link) or a sc
 - Google Slides links are fetched as `/export/pdf` without cookies; this works (CORS allowed) for decks shared with "Anyone with the link".
 
 ## Verify changes
-Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sample": row 8 (9 m) / 100" projector / Bright gives about 44px with heads in front. Front row / 55" TV: no heads, the view pans. Dark: silhouettes. Change the crowd and check the seat map and the heads agree. Call: Zoom-style laptop at 720p, Teams-style side-by-side, phone. Paste a public Google Slides link. Check light and dark, and 390px width (iframe check).
+Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sample": row 8 (9 m) / 100" projector / Bright gives about 44px with heads in front. Front row / 55" TV: no heads, the view pans. Dark: silhouettes. Check the seat map dots and the heads agree; the Fit button shows the whole room. Hover controls for tooltips; pasting a link shows the loading pill. Call: Zoom-style laptop at 720p, Teams-style side-by-side, phone. Paste a public Google Slides link. Check light and dark, and 390px width (iframe check).

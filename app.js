@@ -1,6 +1,6 @@
 import {
   SCREENS, LIGHTS, RECEIVED, DEVICES, APPS, LAYOUTS, SCALES,
-  ROWS, SEATS_PER_ROW, CROWDS, seatDistance, seatOffset, seatTaken,
+  ROWS, SEATS_PER_ROW, seatDistance, seatOffset, seatTaken,
   CARD_SHORT_MM, CARD_LONG_MM, DEFAULT_PX_PER_MM,
   UI_TEXT_PX, MAX_SLIDE_WIDTH, MAX_SLIDES,
 } from './presets.js';
@@ -46,7 +46,6 @@ const state = {
   seatRow: Number(store.get('seatRow', 7)),
   seatCol: Number(store.get('seatCol', 3)),
   light: store.get('light', 'bright'),
-  crowd: store.get('crowd', 'full'),
   app: store.get('app', 'zoom'),
   device: store.get('device', 'laptop'),
   layout: store.get('layout', 'speaker'),
@@ -62,7 +61,6 @@ const state = {
 if (state.mode !== 'room' && state.mode !== 'call') state.mode = 'room';
 if (!byId(SCREENS, state.screen)) state.screen = 'proj100';
 if (!LIGHTS[state.light]) state.light = 'bright';
-if (!byId(CROWDS, state.crowd)) state.crowd = 'full';
 if (!byId(APPS, state.app)) state.app = 'zoom';
 if (!byId(DEVICES, state.device)) state.device = 'laptop';
 if (!byId(LAYOUTS, state.layout)) state.layout = 'speaker';
@@ -73,25 +71,23 @@ if (!(Number.isInteger(state.seatCol) && state.seatCol >= 0 && state.seatCol < S
 if (!(typeof state.pxPerMm === 'number' && state.pxPerMm > 1 && state.pxPerMm < 20)) state.pxPerMm = null;
 
 const el = Object.fromEntries([
-  'empty', 'work', 'fileInput', 'fileInput2', 'sampleBtn', 'railSample', 'railAdd', 'themeBtn', 'clearBtn',
-  'crumb', 'slideNav', 'slideName', 'slideCount', 'prevBtn', 'nextBtn',
+  'empty', 'work', 'fileInput', 'fileInput2', 'sampleBtn', 'navSample', 'navAdd', 'themeBtn', 'clearBtn',
+  'crumb', 'slideName', 'context',
   'viewSeg', 'lifePill', 'viewport', 'scene', 'roomCv', 'callHost', 'panHint', 'overlayBtn', 'fitBtn', 'busy',
-  'verdictCard', 'statSmall', 'statFaint', 'statThird',
-  'seatDist', 'seatRows', 'seatRowsEl', 'crowdSeg', 'scenePrev', 'sceneNext', 'sceneCount', 'sceneNav',
+  'resultCard',
+  'seatDist', 'seatRows', 'seatRowsEl', 'scenePrev', 'sceneNext', 'sceneCount', 'sceneNav',
   'linkForm', 'linkInput', 'linkForm2', 'linkInput2', 'copyLinkBtn', 'screenTiles', 'lightTiles',
   'appTiles', 'layoutHead', 'layoutSeg', 'deviceTiles', 'recvTiles', 'scaleSeg',
   'thumbs', 'calibStatus', 'calibBtn', 'calibDlg', 'card', 'cardRange', 'dropVeil', 'toast',
 ].map((id) => [id, $(id)]));
-const railModeBtns = [...document.querySelectorAll('.rail-btn[data-mode]')];
+const modeBtns = [...document.querySelectorAll('.tab[data-mode]')];
 
 /* ---------- Icons ---------- */
 
-railModeBtns.forEach((b) => { b.innerHTML = icon(b.dataset.mode === 'room' ? 'room' : 'call', 21); });
-el.railAdd.insertAdjacentHTML('afterbegin', icon('plus', 21));
-el.railSample.innerHTML = icon('sample', 21);
-el.themeBtn.innerHTML = icon('theme', 20);
-el.prevBtn.innerHTML = icon('left', 18);
-el.nextBtn.innerHTML = icon('right', 18);
+modeBtns.forEach((b) => b.insertAdjacentHTML('afterbegin', icon(b.dataset.mode === 'room' ? 'room' : 'call', 18)));
+el.navAdd.insertAdjacentHTML('afterbegin', icon('plus', 18));
+el.navSample.insertAdjacentHTML('afterbegin', icon('sample', 18));
+el.themeBtn.innerHTML = icon('theme', 18);
 el.scenePrev.innerHTML = icon('left', 20);
 el.sceneNext.innerHTML = icon('right', 20);
 el.overlayBtn.innerHTML = icon('eye', 19);
@@ -107,7 +103,6 @@ function cfg() {
       screen,
       light: LIGHTS[state.light],
       lightId: state.light,
-      crowd: byId(CROWDS, state.crowd).fill,
       row: state.seatRow,
       distance: seatDistance(state.seatRow),
       offset: seatOffset(state.seatRow, state.seatCol),
@@ -125,7 +120,7 @@ function cfg() {
 }
 
 function persist() {
-  for (const k of ['mode', 'screen', 'seatRow', 'seatCol', 'light', 'crowd', 'app', 'device', 'layout', 'recv', 'scale', 'overlay', 'fit', 'fitCall']) {
+  for (const k of ['mode', 'screen', 'seatRow', 'seatCol', 'light', 'app', 'device', 'layout', 'recv', 'scale', 'overlay', 'fit', 'fitCall']) {
     store.set(k, state[k]);
   }
 }
@@ -166,8 +161,8 @@ function changed({ recompute = true } = {}) {
   syncUI();
   if (recompute) scheduleRender();
   else {
-    drawScene();
     renderVerdict();
+    drawScene();
   }
 }
 
@@ -177,8 +172,7 @@ buildTiles(el.appTiles, APPS, (a) => `<span class="t-sub">Layout like</span><spa
 buildTiles(el.deviceTiles, DEVICES, (d) => `<span class="t-ic">${icon(d.id, 22)}</span><span class="t-big">${d.label}</span><span class="t-sub">${d.sub}</span>`, (d) => { state.device = d.id; changed(); });
 buildTiles(el.recvTiles, RECEIVED, (r) => `<span class="t-sub">${RECV_SUB[r.id]}</span><span class="t-big">${r.label}</span>`, (r) => { state.recv = r.id; changed(); });
 buildSeg(el.layoutSeg, LAYOUTS, (l) => { state.layout = l.id; changed(); });
-buildSeg(el.crowdSeg, CROWDS, (c) => { state.crowd = c.id; changed({ recompute: false }); });
-buildSeg(el.scaleSeg, SCALES, (s) => { state.scale = s.id; changed({ recompute: false }); renderStats(); });
+buildSeg(el.scaleSeg, SCALES, (s) => { state.scale = s.id; changed({ recompute: false }); });
 
 function buildSeatMap() {
   el.seatRowsEl.innerHTML = '';
@@ -192,6 +186,7 @@ function buildSeatMap() {
       b.dataset.r = String(r);
       b.dataset.c = String(c);
       b.setAttribute('aria-label', `Row ${r + 1}, seat ${c + 1}, ${seatDistance(r)} metres from the screen`);
+      b.dataset.tip = `Row ${r + 1}, ${seatDistance(r)} m from the screen`;
       b.addEventListener('click', () => {
         const rowChanged = state.seatRow !== r;
         state.seatRow = r;
@@ -206,9 +201,8 @@ function buildSeatMap() {
 buildSeatMap();
 
 function peopleAhead() {
-  const fill = byId(CROWDS, state.crowd).fill;
   let n = 0;
-  for (let r = 0; r < state.seatRow; r++) for (let c = 0; c < SEATS_PER_ROW; c++) if (seatTaken(r, c, fill)) n++;
+  for (let r = 0; r < state.seatRow; r++) for (let c = 0; c < SEATS_PER_ROW; c++) if (seatTaken(r, c)) n++;
   return n;
 }
 const peopleText = (n) => `${n} ${n === 1 ? 'person' : 'people'}`;
@@ -218,7 +212,7 @@ function syncSeatMap() {
     const r = Number(b.dataset.r);
     const c = Number(b.dataset.c);
     const you = r === state.seatRow && c === state.seatCol;
-    const taken = !you && seatTaken(r, c, byId(CROWDS, state.crowd).fill);
+    const taken = !you && seatTaken(r, c);
     b.classList.toggle('you', you);
     b.classList.toggle('taken', taken);
     b.classList.toggle('ahead', taken && r < state.seatRow);
@@ -246,7 +240,7 @@ el.fitBtn.addEventListener('click', () => {
   else state.fit = !state.fit;
   changed({ recompute: false });
 });
-railModeBtns.forEach((b) => b.addEventListener('click', () => {
+modeBtns.forEach((b) => b.addEventListener('click', () => {
   if (state.mode === b.dataset.mode) return;
   state.mode = b.dataset.mode;
   changed();
@@ -262,7 +256,7 @@ function crumbText() {
 }
 
 function syncUI() {
-  railModeBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)));
+  modeBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)));
   el.work.classList.toggle('mode-room', state.mode === 'room');
   el.work.classList.toggle('mode-call', state.mode === 'call');
   for (const b of el.viewSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === state.view));
@@ -273,26 +267,28 @@ function syncUI() {
   syncPressed(el.recvTiles, state.recv);
   syncPressed(el.layoutSeg, state.layout);
   syncPressed(el.scaleSeg, state.scale);
-  syncPressed(el.crowdSeg, state.crowd);
   const phone = state.device === 'phone';
   el.layoutHead.hidden = phone;
   el.layoutSeg.hidden = phone;
   syncSeatMap();
   el.overlayBtn.setAttribute('aria-pressed', String(state.overlay));
   el.fitBtn.setAttribute('aria-pressed', String(fitOn()));
-  el.crumb.textContent = state.slides.length ? crumbText() : 'Can they read it from there?';
+  el.overlayBtn.dataset.tip = state.overlay
+    ? 'Hide the highlights. Red marks text too small to read, amber marks text too faint.'
+    : 'Highlight problem areas: red is too small to read, amber is too faint.';
+  el.fitBtn.dataset.tip = state.mode === 'call'
+    ? (state.fitCall ? 'Show the device at life size, as big as it really looks' : 'Fit the whole device in the card')
+    : (state.fit ? 'Back to life size: the screen at the size it really looks from this seat' : 'Step back to see the whole front of the room (smaller than life)');
+  el.crumb.textContent = state.slides.length ? crumbText() : '';
   el.calibStatus.textContent = state.pxPerMm ? 'Screen calibrated' : 'Sizes assume a typical laptop';
   el.calibBtn.textContent = state.pxPerMm ? 'Recalibrate' : 'Calibrate';
   const n = state.slides.length;
-  el.slideNav.hidden = n === 0;
+  el.context.hidden = n === 0;
   if (n) {
     el.slideName.textContent = state.slides[state.idx].name;
-    el.slideCount.textContent = `${String(state.idx + 1).padStart(2, '0')}/${String(n).padStart(2, '0')}`;
-    el.prevBtn.disabled = state.idx === 0;
-    el.nextBtn.disabled = state.idx >= n - 1;
-    el.sceneCount.textContent = el.slideCount.textContent;
-    el.scenePrev.disabled = el.prevBtn.disabled;
-    el.sceneNext.disabled = el.nextBtn.disabled;
+    el.sceneCount.textContent = `${String(state.idx + 1).padStart(2, '0')}/${String(n).padStart(2, '0')}`;
+    el.scenePrev.disabled = state.idx === 0;
+    el.sceneNext.disabled = state.idx >= n - 1;
     el.sceneNav.hidden = n < 2;
   }
   for (const s of state.slides) updateBadge(s);
@@ -316,6 +312,18 @@ function toast(msg) {
   el.toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.toast.hidden = true; }, 3200);
+}
+
+const loader = document.createElement('div');
+loader.className = 'loader';
+loader.setAttribute('role', 'status');
+loader.hidden = true;
+loader.innerHTML = '<span class="spin" aria-hidden="true"></span><span class="loader-text"></span>';
+document.body.appendChild(loader);
+function setLoading(text) {
+  loader.hidden = !text;
+  if (text) loader.querySelector('.loader-text').textContent = text;
+  for (const b of document.querySelectorAll('.linkform button')) b.disabled = !!text;
 }
 
 function setBusy(on) {
@@ -397,6 +405,7 @@ async function addPdf(file, name = file.name) {
   const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
   const base = (name || 'Slides').replace(/\.pdf$/i, '');
   for (let p = 1; p <= doc.numPages; p++) {
+    setLoading(`Reading page ${p} of ${doc.numPages}`);
     if (state.slides.length >= MAX_SLIDES) break;
     const page = await doc.getPage(p);
     const vp1 = page.getViewport({ scale: 1 });
@@ -422,6 +431,7 @@ async function addFiles(fileList) {
   }
   const firstNew = state.slides.length;
   setBusy(true);
+  setLoading(files.length > 1 ? `Adding ${files.length} files` : 'Adding your slide');
   for (const f of files) {
     if (state.slides.length >= MAX_SLIDES) {
       toast(`Back Row holds up to ${MAX_SLIDES} slides at a time.`);
@@ -436,6 +446,7 @@ async function addFiles(fileList) {
     }
   }
   setBusy(false);
+  setLoading(null);
   if (state.slides.length > firstNew) {
     state.idx = firstNew;
     showWork();
@@ -451,7 +462,7 @@ function addSample() {
 el.fileInput.addEventListener('change', () => { addFiles(el.fileInput.files); el.fileInput.value = ''; });
 el.fileInput2.addEventListener('change', () => { addFiles(el.fileInput2.files); el.fileInput2.value = ''; });
 el.sampleBtn.addEventListener('click', addSample);
-el.railSample.addEventListener('click', addSample);
+el.navSample.addEventListener('click', addSample);
 el.clearBtn.addEventListener('click', () => {
   state.slides = [];
   state.idx = 0;
@@ -467,8 +478,6 @@ el.clearBtn.addEventListener('click', () => {
 });
 el.scenePrev.addEventListener('click', () => { if (state.idx > 0) select(state.idx - 1); });
 el.sceneNext.addEventListener('click', () => { if (state.idx < state.slides.length - 1) select(state.idx + 1); });
-el.prevBtn.addEventListener('click', () => { if (state.idx > 0) select(state.idx - 1); });
-el.nextBtn.addEventListener('click', () => { if (state.idx < state.slides.length - 1) select(state.idx + 1); });
 
 let dragDepth = 0;
 const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
@@ -539,7 +548,7 @@ function buildThumbs() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'thumb';
-    b.title = s.name;
+    b.dataset.tip = s.name;
     b.setAttribute('aria-label', `Slide ${i + 1}: ${s.name}`);
     const cv = document.createElement('canvas');
     paint(cv, s.thumb);
@@ -577,7 +586,7 @@ function updateBadge(s) {
     const n = v.small + v.faint;
     s.badge.textContent = n ? String(n) : '✓';
     s.badge.className = 'badge ' + (n ? 'bad' : 'ok');
-    s.badge.title = n ? `${n} problem area${n === 1 ? '' : 's'}` : 'Reads fine';
+    s.el.dataset.tip = `${s.name}: ${n ? `${n} problem area${n === 1 ? '' : 's'} from here` : 'reads fine from here'}`;
   } else {
     s.badge.textContent = '';
     s.badge.className = 'badge';
@@ -630,8 +639,8 @@ async function renderCurrent() {
     slide.verdict = { key: c.key, small: a.small, faint: a.faint };
     updateBadge(slide);
     currentRes = { slide, c, sim, a, v };
-    drawScene();
     renderVerdict();
+    drawScene();
   } catch (err) {
     console.error(err);
     toast('Something went wrong drawing that slide.');
@@ -719,57 +728,77 @@ function renderVerdict() {
   const { slide, c, a, v } = currentRes;
   const w = slide.canvas.width;
   const h = slide.canvas.height;
+  const colors = overlayColors();
   let sub;
-  let advice = '';
+  let third;
   if (c.mode === 'room') {
     const aspect = w / h;
     const pt = Math.round((v * 960) / w);
-    sub = `Font size on this ${w}px-wide slide${aspect > 1.7 && aspect < 1.8 ? `, about ${pt}pt in a 16:9 PowerPoint deck` : ''}.`;
+    sub = aspect > 1.7 && aspect < 1.8 ? `About ${pt}pt in a 16:9 PowerPoint deck` : `On this ${w}px-wide slide`;
+    const ppl = peopleAhead();
+    third = c.row === 0
+      ? '<li data-tip="Nobody sits between you and the screen"><span>Rows in front</span><b>None</b></li>'
+      : `<li data-tip="Rows of people between you and the screen; their heads can hide the bottom of the slide"><span>Rows in front</span><b>${c.row} <small>${peopleText(ppl)}</small></b></li>`;
   } else {
-    sub = `Font size in this ${w}px-wide screenshot.`;
-    const { zoom } = zoomNeeded();
-    advice = zoom > 100
-      ? `<p class="advice">Zoom the window you share to at least <strong>${zoom}%</strong>.</p>`
-      : '<p class="advice">Normal interface text reads fine at 100% zoom.</p>';
+    const { zoom, s } = zoomNeeded();
+    sub = `In this ${w}px-wide screenshot`;
+    third = `<li data-tip="How far to zoom the window you share so ${UI_TEXT_PX}px interface text${s === 2 ? ' (28px in a 2x screenshot)' : ''} still reads"><span>Zoom to share at</span><b>${zoom}%</b></li>`;
   }
   const n = a.small + a.faint;
   const status = n === 0
-    ? '<span class="status ok"><i></i>Everything reads from here</span>'
-    : `<span class="status bad"><i></i>${plural(n, 'problem area')}</span>`;
-  el.verdictCard.innerHTML = `
-    <span class="label">Smallest readable text</span>
-    <div class="bignum">${v}<small>px</small></div>
-    <p class="sub">${sub}</p>
-    ${advice}
-    ${status}`;
-  renderStats();
+    ? '<span class="status ok"><i></i>Reads fine</span>'
+    : `<span class="status bad"><i></i>${plural(n, 'problem')}</span>`;
+  el.resultCard.innerHTML = `
+    <div class="res-head"><span class="label">Smallest readable text</span>${status}</div>
+    <div class="res-main" data-tip="Text smaller than this can't be read from here. Measured on the slide's own pixels."><span class="midnum">${v}<small>px</small></span><span class="muted">${sub}</span></div>
+    <ul class="metrics">
+      <li data-tip="Areas of text too small to make out from here (red on the slide)"><span><i class="dot" style="background:${colors.small}"></i>Too small</span><b>${a.small} <small>${a.small === 1 ? 'area' : 'areas'}</small></b></li>
+      <li data-tip="Areas too low in contrast once the light washes the picture out (amber on the slide)"><span><i class="dot" style="background:${colors.faint}"></i>Too faint</span><b>${a.faint} <small>${a.faint === 1 ? 'area' : 'areas'}</small></b></li>
+      ${third}
+    </ul>`;
 }
 
-function renderStats() {
-  if (!currentRes) return;
-  const { c, a } = currentRes;
-  const colors = overlayColors();
-  el.statSmall.innerHTML = `
-    <span class="label"><i class="swatch" style="background:${colors.small}"></i>Too small</span>
-    <div class="bignum">${a.small}</div>
-    <span class="cap">${a.small === 1 ? 'area' : 'areas'} of text they can't make out</span>`;
-  el.statFaint.innerHTML = `
-    <span class="label"><i class="swatch" style="background:${colors.faint}"></i>Too faint</span>
-    <div class="bignum">${a.faint}</div>
-    <span class="cap">${a.faint === 1 ? 'area' : 'areas'} that wash out</span>`;
-  if (c.mode === 'room') {
-    el.statThird.innerHTML = `
-      <span class="label">Rows in front</span>
-      <div class="bignum">${c.row}</div>
-      <span class="cap">${c.row === 0 ? 'Front row, a clear view' : `${peopleText(peopleAhead())} between you and the screen`}</span>`;
-  } else {
-    const { zoom, s } = zoomNeeded();
-    el.statThird.innerHTML = `
-      <span class="label">Zoom needed</span>
-      <div class="bignum">${zoom}<small>%</small></div>
-      <span class="cap">${zoom > 100 ? `so ${UI_TEXT_PX}px interface text${s === 2 ? ' (28px in this 2x screenshot)' : ''} survives` : 'Normal interface text survives as it is'}</span>`;
-  }
+/* ---------- Tooltips ---------- */
+
+const tipEl = document.createElement('div');
+tipEl.className = 'tip';
+tipEl.setAttribute('role', 'tooltip');
+tipEl.hidden = true;
+document.body.appendChild(tipEl);
+let tipFor = null;
+
+function showTip(target) {
+  const text = target.dataset.tip;
+  if (!text) return;
+  tipFor = target;
+  tipEl.textContent = text;
+  tipEl.hidden = false;
+  const r = target.getBoundingClientRect();
+  const t = tipEl.getBoundingClientRect();
+  let x = r.left + r.width / 2 - t.width / 2;
+  x = Math.max(8, Math.min(window.innerWidth - t.width - 8, x));
+  let y = r.bottom + 8;
+  if (y + t.height > window.innerHeight - 8) y = r.top - t.height - 8;
+  tipEl.style.left = `${Math.round(x)}px`;
+  tipEl.style.top = `${Math.round(y)}px`;
 }
+function hideTip() {
+  tipFor = null;
+  tipEl.hidden = true;
+}
+document.addEventListener('pointerover', (e) => {
+  if (e.pointerType === 'touch' || drag) return;
+  const t = e.target.closest('[data-tip]');
+  if (t && t !== tipFor) showTip(t);
+  else if (!t && tipFor) hideTip();
+});
+document.addEventListener('pointerdown', hideTip);
+document.addEventListener('scroll', hideTip, true);
+document.addEventListener('focusin', (e) => {
+  const t = e.target.closest && e.target.closest('[data-tip]');
+  if (t && t.matches(':focus-visible')) showTip(t);
+});
+document.addEventListener('focusout', hideTip);
 
 let bgRun = 0;
 const idle = () => new Promise((r) => (window.requestIdleCallback ? requestIdleCallback(() => r(), { timeout: 500 }) : setTimeout(r, 30)));
@@ -794,6 +823,16 @@ async function backgroundVerdicts() {
   }
 }
 
+if (window.ResizeObserver) {
+  let lastSize = '';
+  new ResizeObserver(() => {
+    const size = `${el.viewport.clientWidth}x${el.viewport.clientHeight}`;
+    if (size === lastSize) return;
+    lastSize = size;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(drawScene, 60);
+  }).observe(el.viewport);
+}
 let resizeTimer = 0;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
@@ -839,9 +878,11 @@ async function addLink(raw, slideIndex = 0) {
   }
   const { google, urls } = linkSources(url);
   setBusy(true);
+  setLoading(google ? 'Opening your Google Slides deck' : 'Downloading');
   const blob = await fetchFirst(urls);
   if (!blob) {
     setBusy(false);
+    setLoading(null);
     toast(google
       ? 'Couldn’t open that deck. In Google Slides, set Share, General access to “Anyone with the link”.'
       : 'That site doesn’t let other pages load its files. Download it and drop it here instead.');
@@ -858,6 +899,7 @@ async function addLink(raw, slideIndex = 0) {
     toast('That link isn’t a PDF, an image or a Google Slides deck.');
   }
   setBusy(false);
+  setLoading(null);
   if (state.slides.length > firstNew) {
     state.src = url;
     state.idx = Math.min(firstNew + slideIndex, state.slides.length - 1);
