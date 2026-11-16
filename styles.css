@@ -247,8 +247,7 @@ button, input { font: inherit; color: inherit; }
 
 /* ---------- Workspace grid ---------- */
 .work .scene-card { grid-column: 1 / 9; grid-row: 1 / 3; padding: 0; display: flex; flex-direction: column; }
-.work .result-card { grid-column: 9 / 13; grid-row: 1; }
-.work .ctl.primary { grid-column: 9 / 13; grid-row: 2; }
+.work .side { grid-column: 9 / 13; grid-row: 1 / 3; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .work .ctl.half { grid-column: span 6; }
 .work .slides-card { grid-column: 1 / -1; }
 .work.mode-room .call-only, .work.mode-call .room-only { display: none; }
@@ -723,13 +722,13 @@ dialog p { color: var(--muted); margin: 0 0 12px; font-size: 14px; }
   .bento { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .span-8, .span-4 { grid-column: 1 / -1; }
   .work .scene-card { grid-column: 1 / -1; grid-row: auto; }
-  .work .result-card { grid-column: span 3; grid-row: auto; }
-  .work .ctl.primary { grid-column: span 3; grid-row: auto; }
+  .work .side { grid-column: 1 / -1; grid-row: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .work .ctl.half { grid-column: span 3; }
 }
 
 @media (max-width: 860px) {
-  .work .result-card, .work .ctl.primary, .work .ctl.half { grid-column: 1 / -1; }
+  .work .side { grid-template-columns: minmax(0, 1fr); }
+  .work .ctl.half { grid-column: 1 / -1; }
   .nav .navbtn span, .tab span { display: none; }
   .tab, .navbtn { width: 40px; padding: 0; justify-content: center; }
 }
@@ -856,3 +855,50 @@ dialog p { color: var(--muted); margin: 0 0 12px; font-size: 14px; }
 .seat-row.even { transform: translateX(-3.5px); }
 .ctl.primary { gap: 12px; }
 .shell { padding-bottom: 32px; }
+
+/* ---------- Home: fills the first screen on desktop ---------- */
+.example-link { align-self: flex-start; margin-top: 16px; font-size: 14px; color: inherit; opacity: 0.8; }
+.example-link:hover { opacity: 1; }
+@media (min-width: 1200px) {
+  body:has(#empty:not([hidden])) .shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+  body:has(#empty:not([hidden])) main { flex: 1; display: flex; flex-direction: column; }
+  #empty { flex: 1; grid-template-rows: 1fr auto; }
+  #empty .hero, #empty .dropcard { min-height: 0; }
+}
+
+/* ---------- Collapsible cards ---------- */
+.work .ctl.half { align-self: start; }
+.ctl-head.toggle {
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+.ctl-head.toggle .label { flex: 1; cursor: inherit; }
+.ctl-head.toggle .summary { display: none; color: var(--ink); font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.collapsed .ctl-head.toggle .summary { display: inline; }
+.chev { display: inline-grid; place-items: center; color: var(--muted); transform: rotate(90deg); transition: transform 0.2s; flex: none; }
+.collapsed .chev { transform: rotate(0deg); }
+.ctl-head.toggle:hover .chev { color: var(--ink); }
+.ctl-body { display: flex; flex-direction: column; gap: 14px; }
+.ctl.primary .ctl-body { gap: 12px; }
+.res-main .status { margin-left: auto; }
+
+/* Home fits one screen: the headline scales with the viewport height too. */
+@media (min-width: 1200px) {
+  .hero h1 { font-size: clamp(44px, min(7vw, 9vh), 104px); }
+  body:has(#empty:not([hidden])) .shell { padding-bottom: 14px; }
+  .hero { padding: 30px 34px; }
+  .lede { margin-bottom: 20px; }
+  .feature { min-height: 0; padding: 22px 24px; }
+  .feature h3 { font-size: 26px; margin-top: 18px; }
+}

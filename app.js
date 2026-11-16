@@ -74,7 +74,7 @@ const el = Object.fromEntries([
   'empty', 'work', 'fileInput', 'fileInput2', 'sampleBtn', 'navSample', 'navAdd', 'themeBtn', 'clearBtn',
   'crumb', 'slideName', 'context',
   'viewSeg', 'lifePill', 'viewport', 'scene', 'roomCv', 'callHost', 'panHint', 'overlayBtn', 'fitBtn', 'busy',
-  'resultCard',
+  'resultCard', 'resultBody', 'modeTabs',
   'seatDist', 'seatRows', 'seatRowsEl', 'scenePrev', 'sceneNext', 'sceneCount', 'sceneNav',
   'linkForm', 'linkInput', 'linkForm2', 'linkInput2', 'copyLinkBtn', 'screenTiles', 'lightTiles',
   'appTiles', 'layoutHead', 'layoutSeg', 'deviceTiles', 'recvTiles', 'scaleSeg',
@@ -92,6 +92,49 @@ el.scenePrev.innerHTML = icon('left', 20);
 el.sceneNext.innerHTML = icon('right', 20);
 el.overlayBtn.innerHTML = icon('eye', 19);
 el.fitBtn.innerHTML = icon('expand', 18);
+
+/* ---------- Collapsible cards ---------- */
+
+// Every settings card (and the results card) folds down to its header, which then
+// shows a one-line summary. Which cards are folded is remembered per viewer.
+const folded = new Set(store.get('collapsed', []));
+const summaries = new Map();
+for (const card of document.querySelectorAll('#work .card.ctl')) {
+  const head = card.querySelector(':scope > .ctl-head');
+  const label = head.querySelector('.label');
+  const title = label.textContent.replace('ⓘ', '').trim();
+  const key = card.dataset.key || title;
+  const body = document.createElement('div');
+  body.className = 'ctl-body';
+  body.id = `cb-${key.toLowerCase().replace(/\W+/g, '-')}`;
+  while (head.nextSibling) body.appendChild(head.nextSibling);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ctl-head toggle';
+  btn.setAttribute('aria-controls', body.id);
+  if (label.dataset.tip) btn.dataset.tip = label.dataset.tip;
+  btn.innerHTML = `<span class="label">${title}</span><span class="summary"></span><span class="chev" aria-hidden="true">${icon('right', 16)}</span>`;
+  head.replaceWith(btn);
+  card.appendChild(body);
+  const setFolded = (on) => {
+    card.classList.toggle('collapsed', on);
+    btn.setAttribute('aria-expanded', String(!on));
+    body.hidden = on;
+  };
+  setFolded(folded.has(key));
+  btn.addEventListener('click', () => {
+    const on = !card.classList.contains('collapsed');
+    setFolded(on);
+    if (on) folded.add(key);
+    else folded.delete(key);
+    store.set('collapsed', [...folded]);
+  });
+  summaries.set(key, btn.querySelector('.summary'));
+}
+function setSummary(key, text) {
+  const s = summaries.get(key);
+  if (s) s.textContent = text;
+}
 
 /* ---------- Config ---------- */
 
@@ -271,6 +314,16 @@ function syncUI() {
   el.layoutHead.hidden = phone;
   el.layoutSeg.hidden = phone;
   syncSeatMap();
+  {
+    const scr = byId(SCREENS, state.screen);
+    const dev = byId(DEVICES, state.device);
+    setSummary('Where you sit', `Row ${state.seatRow + 1}, ${seatDistance(state.seatRow)} m`);
+    setSummary('Screen', `${scr.label} ${scr.sub}`);
+    setSummary('Room light', LIGHTS[state.light].label);
+    setSummary('Watching on', `${dev.label}, ${byId(APPS, state.app).label}`);
+    setSummary('They receive', byId(RECEIVED, state.recv).label);
+    setSummary('Screenshot scale', byId(SCALES, state.scale).label);
+  }
   el.overlayBtn.setAttribute('aria-pressed', String(state.overlay));
   el.fitBtn.setAttribute('aria-pressed', String(fitOn()));
   el.overlayBtn.dataset.tip = state.overlay
@@ -284,6 +337,7 @@ function syncUI() {
   el.calibBtn.textContent = state.pxPerMm ? 'Recalibrate' : 'Calibrate';
   const n = state.slides.length;
   el.context.hidden = n === 0;
+  el.modeTabs.hidden = n === 0;
   if (n) {
     el.slideName.textContent = state.slides[state.idx].name;
     el.sceneCount.textContent = `${String(state.idx + 1).padStart(2, '0')}/${String(n).padStart(2, '0')}`;
@@ -748,9 +802,9 @@ function renderVerdict() {
   const status = n === 0
     ? '<span class="status ok"><i></i>Reads fine</span>'
     : `<span class="status bad"><i></i>${plural(n, 'problem')}</span>`;
-  el.resultCard.innerHTML = `
-    <div class="res-head"><span class="label">Smallest readable text</span>${status}</div>
-    <div class="res-main" data-tip="Text smaller than this can't be read from here. Measured on the slide's own pixels."><span class="midnum">${v}<small>px</small></span><span class="muted">${sub}</span></div>
+  setSummary('result', `${v}px, ${n ? plural(n, 'problem') : 'reads fine'}`);
+  el.resultBody.innerHTML = `
+    <div class="res-main" data-tip="Text smaller than this can't be read from here. Measured on the slide's own pixels."><span class="midnum">${v}<small>px</small></span><span class="muted">${sub}</span>${status}</div>
     <ul class="metrics">
       <li data-tip="Areas of text too small to make out from here (red on the slide)"><span><i class="dot" style="background:${colors.small}"></i>Too small</span><b>${a.small} <small>${a.small === 1 ? 'area' : 'areas'}</small></b></li>
       <li data-tip="Areas too low in contrast once the light washes the picture out (amber on the slide)"><span><i class="dot" style="background:${colors.faint}"></i>Too faint</span><b>${a.faint} <small>${a.faint === 1 ? 'area' : 'areas'}</small></b></li>
