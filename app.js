@@ -580,9 +580,10 @@ function renderVerdict() {
     const s = state.scale === 'auto' ? (w >= 2400 ? 2 : 1) : Number(state.scale);
     const uiPx = UI_TEXT_PX * s;
     const zoom = Math.ceil(((v / uiPx) * 100) / 10) * 10;
+    const asShot = s === 1 ? '' : ` (${uiPx}px in this ${s}x screenshot)`;
     extra = zoom > 100
-      ? `<p>Normal ${UI_TEXT_PX}px interface text is ${uiPx}px here, too small for this viewer. Zoom the window you share to at least <strong>${zoom}%</strong>.</p>`
-      : `<p>Normal ${UI_TEXT_PX}px interface text reads fine at 100% zoom.</p>`;
+      ? `<p>Normal ${UI_TEXT_PX}px interface text${asShot} is too small for this viewer. Zoom the window you share to at least <strong>${zoom}%</strong>.</p>`
+      : `<p>Normal ${UI_TEXT_PX}px interface text${asShot} reads fine at 100% zoom.</p>`;
   }
   let status;
   if (a.small + a.faint === 0) {

@@ -231,7 +231,7 @@ legend {
 .big { font-family: var(--serif); font-size: 60px; line-height: 0.95; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .big small { font-family: var(--sans); font-size: 18px; color: var(--muted); margin-left: 4px; }
 .vtext { flex: 1; min-width: 220px; }
-.vtext strong { display: block; font-weight: 600; }
+.vtext > strong { display: block; font-weight: 600; }
 .vtext .sub { color: var(--muted); font-size: 14px; }
 .vtext p { margin: 6px 0 0; font-size: 14px; }
 .status-ok { color: var(--ok); }
