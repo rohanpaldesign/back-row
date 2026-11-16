@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Back Row</title>
-  <meta name="description" content="See your slides and screen share the way your audience does: from the back of a bright room, or in a 720p call tile.">
+  <meta name="description" content="See your slides and screen share the way your audience does: from the back of a bright room, or in a video call on a laptop or phone.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script>
     try { var t = localStorage.getItem('backrow:theme'); if (t) document.documentElement.dataset.theme = JSON.parse(t); } catch (e) {}
@@ -16,116 +16,176 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="./">Back Row</a>
-    <span class="tag">Can they read it from there?</span>
-    <button id="themeBtn" class="icon-btn" type="button" aria-label="Switch light or dark">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 0 18V3z"/><circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-    </button>
-  </header>
+  <nav class="rail" aria-label="Tools">
+    <a class="rail-logo" href="./" aria-label="Back Row home">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="3.5" width="18" height="10" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor" opacity=".45"/><circle cx="17" cy="18.5" r="1.7" fill="#ff4d3d"/></svg>
+    </a>
+    <span class="rail-sep"></span>
+    <button class="rail-btn" type="button" data-mode="room" aria-label="In the room" title="In the room"></button>
+    <button class="rail-btn" type="button" data-mode="call" aria-label="On a call" title="On a call"></button>
+    <span class="rail-sep"></span>
+    <label class="rail-btn" title="Add slides" aria-label="Add slides" id="railAdd"><input id="fileInput2" type="file" accept="image/*,application/pdf" multiple hidden></label>
+    <button class="rail-btn" type="button" id="railSample" aria-label="Load the sample slide" title="Sample slide"></button>
+    <button class="rail-btn" type="button" id="themeBtn" aria-label="Switch light or dark" title="Light or dark"></button>
+  </nav>
 
-  <main>
-    <section id="empty" class="empty">
-      <div class="drop" id="dropZone">
-        <svg class="seats" viewBox="0 0 240 120" aria-hidden="true">
-          <rect x="60" y="6" width="120" height="44" rx="4" class="screen"/>
-          <rect x="72" y="16" width="62" height="7" rx="2" class="line"/>
-          <rect x="72" y="29" width="44" height="4" rx="2" class="line faint"/>
-          <rect x="72" y="37" width="52" height="4" rx="2" class="line faint"/>
-          <g class="row"><circle cx="96" cy="70" r="6"/><circle cx="120" cy="70" r="6"/><circle cx="144" cy="70" r="6"/></g>
-          <g class="row r2"><circle cx="72" cy="88" r="6"/><circle cx="96" cy="88" r="6"/><circle cx="120" cy="88" r="6"/><circle cx="144" cy="88" r="6"/><circle cx="168" cy="88" r="6"/></g>
-          <g class="row r3"><circle cx="48" cy="106" r="6"/><circle cx="72" cy="106" r="6"/><circle cx="96" cy="106" r="6"/><circle cx="120" cy="106" r="6"/><circle cx="144" cy="106" r="6"/><circle cx="168" cy="106" r="6"/><circle cx="192" cy="106" r="6" class="you"/></g>
-        </svg>
-        <h1>See your slides from the back row</h1>
-        <p class="lede">Drop slides, a PDF or a screenshot. Pick where your audience sits, in the room or on a call, and see what they actually see.</p>
-        <div class="actions">
-          <label class="btn primary">Choose files<input id="fileInput" type="file" accept="image/*,application/pdf" multiple hidden></label>
-          <button class="btn" id="sampleBtn" type="button">Try a sample</button>
-        </div>
-        <p class="hint">You can also paste an image. Nothing leaves your device.</p>
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <span class="wordmark">Back Row</span>
+        <span class="crumb" id="crumb">Can they read it from there?</span>
       </div>
-    </section>
-
-    <section id="work" class="work" hidden>
-      <aside class="panel">
-        <div class="seg" id="modeSeg">
-          <button type="button" data-mode="room">In the room</button>
-          <button type="button" data-mode="call">On a call</button>
-        </div>
-
-        <div id="roomCtl">
-          <fieldset><legend>Screen</legend><div class="chips" id="screenChips"></div></fieldset>
-          <fieldset>
-            <legend>Seat</legend>
-            <div class="chips" id="seatChips"></div>
-            <div class="range">
-              <input type="range" id="distRange" min="1" max="20" step="0.5" aria-label="Distance from the screen in metres">
-              <output id="distOut" for="distRange"></output>
-            </div>
-          </fieldset>
-          <fieldset><legend>Room light</legend><div class="chips" id="lightChips"></div></fieldset>
-        </div>
-
-        <div id="callCtl" hidden>
-          <fieldset><legend>They receive</legend><div class="chips" id="recvChips"></div></fieldset>
-          <fieldset><legend>Watching on</legend><div class="chips" id="viewerChips"></div></fieldset>
-          <fieldset><legend>Screenshot scale</legend><div class="chips" id="scaleChips"></div></fieldset>
-        </div>
-
-        <fieldset>
-          <legend>Show</legend>
-          <label class="check"><input type="checkbox" id="overlayChk"> Highlight problem areas</label>
-          <label class="check"><input type="checkbox" id="fitChk"> Fit to window</label>
-        </fieldset>
-
-        <div class="calib"><span id="calibStatus"></span> <button class="link" id="calibBtn" type="button">Calibrate</button></div>
-
-        <div class="panel-actions">
-          <label class="btn small">Add files<input id="fileInput2" type="file" accept="image/*,application/pdf" multiple hidden></label>
-          <button class="btn small" id="clearBtn" type="button">Start over</button>
-        </div>
-      </aside>
-
-      <div class="stage">
-        <div class="verdict" id="verdict" aria-live="polite"></div>
-        <div class="viewbar">
-          <div class="seg compact" id="viewSeg">
-            <button type="button" data-view="audience">Audience</button>
-            <button type="button" data-view="original">Original</button>
-            <button type="button" data-view="split">Split</button>
-          </div>
-          <div class="legend" id="legend"><span><i class="dot small"></i>Too small</span><span><i class="dot faint"></i>Too faint</span></div>
-        </div>
-        <div class="frame-outer">
-          <div class="frame" id="frame">
-            <div class="wrap" id="wrap">
-              <canvas id="origCv"></canvas>
-              <canvas id="audCv"></canvas>
-              <canvas id="ovCv"></canvas>
-              <span class="side-tag left" id="tagL" hidden>Original</span>
-              <span class="side-tag right" id="tagR" hidden>Audience</span>
-              <div class="divider" id="divider" hidden></div>
-              <input type="range" id="splitRange" min="0" max="100" value="50" aria-label="Split position" hidden>
-            </div>
-          </div>
-          <div class="busy" id="busy" hidden>Working…</div>
-        </div>
-        <p class="note" id="sizeNote"></p>
-        <div class="thumbs" id="thumbs"></div>
+      <div class="slidenav" id="slideNav" hidden>
+        <span class="slidename" id="slideName"></span>
+        <span class="mono counter" id="slideCount">01/01</span>
+        <button class="round" type="button" id="prevBtn" aria-label="Previous slide"></button>
+        <button class="round" type="button" id="nextBtn" aria-label="Next slide"></button>
       </div>
-    </section>
-  </main>
+    </header>
 
-  <footer class="foot">Runs entirely in your browser. Nothing you add is uploaded.</footer>
+    <main>
+      <!-- Empty state -->
+      <section id="empty" class="bento">
+        <article class="card hero sky span-8">
+          <span class="label">Back Row · slide check</span>
+          <h1>Can they read it from there?</h1>
+          <p class="lede">Drop your slides or a screenshot. Take a seat at the back of the room, or join the call on a phone, and see exactly what your audience sees.</p>
+          <div class="actions">
+            <label class="btn primary">Choose files<input id="fileInput" type="file" accept="image/*,application/pdf" multiple hidden></label>
+            <button class="btn ghost" id="sampleBtn" type="button">Try a sample</button>
+          </div>
+          <form class="linkform" id="linkForm">
+            <input id="linkInput" type="url" inputmode="url" placeholder="Or paste a Google Slides, PDF or image link" aria-label="Link to slides">
+            <button class="btn primary" type="submit">Open</button>
+          </form>
+        </article>
+        <article class="card dark span-4 dropcard" id="dropZone">
+          <span class="label">Drop zone</span>
+          <svg class="seats" viewBox="0 0 240 150" aria-hidden="true">
+            <rect x="50" y="8" width="140" height="50" rx="5" class="scr"/>
+            <rect x="64" y="20" width="70" height="8" rx="2" class="ln"/>
+            <rect x="64" y="34" width="52" height="5" rx="2" class="ln f"/>
+            <rect x="64" y="44" width="60" height="5" rx="2" class="ln f"/>
+            <g class="row"><circle cx="90" cy="82" r="7"/><circle cx="120" cy="82" r="7"/><circle cx="150" cy="82" r="7"/></g>
+            <g class="row r2"><circle cx="60" cy="104" r="7"/><circle cx="90" cy="104" r="7"/><circle cx="120" cy="104" r="7"/><circle cx="150" cy="104" r="7"/><circle cx="180" cy="104" r="7"/></g>
+            <g class="row r3"><circle cx="30" cy="126" r="7"/><circle cx="60" cy="126" r="7"/><circle cx="90" cy="126" r="7"/><circle cx="120" cy="126" r="7"/><circle cx="150" cy="126" r="7"/><circle cx="180" cy="126" r="7"/><circle cx="210" cy="126" r="7" class="you"/></g>
+          </svg>
+          <p class="big-copy">Drop slides, a PDF or a screenshot anywhere.</p>
+          <p class="muted">Or paste an image.</p>
+        </article>
+        <article class="card span-4 feature">
+          <span class="num mono">01</span>
+          <h3>In the room</h3>
+          <p>Pick a seat on the map. See the slide over everyone's heads, in a dark or bright room.</p>
+        </article>
+        <article class="card span-4 feature peach">
+          <span class="num mono">02</span>
+          <h3>On a call</h3>
+          <p>Zoom-style or Teams-style window, on a laptop, a monitor or a phone, at 1080p down to 480p.</p>
+        </article>
+        <article class="card span-4 feature">
+          <span class="num mono">03</span>
+          <h3>Private</h3>
+          <p>Everything runs in your browser. Nothing you add is uploaded anywhere.</p>
+        </article>
+      </section>
+
+      <!-- Workspace -->
+      <section id="work" class="bento work" hidden>
+        <article class="card scene-card" id="sceneCard">
+          <div class="scene-top">
+            <div class="seg" id="viewSeg">
+              <button type="button" data-view="audience">Audience</button>
+              <button type="button" data-view="original">Original</button>
+            </div>
+            <span class="pill mono" id="lifePill">Life size</span>
+          </div>
+          <div class="viewport" id="viewport"><div class="scene" id="scene"><canvas id="roomCv"></canvas><div class="callhost" id="callHost"></div></div></div>
+          <div class="scene-bottom">
+            <span class="hint" id="panHint">Drag to look around</span>
+            <span class="spacer"></span>
+            <div class="scenenav" id="sceneNav" hidden>
+              <button class="round glass" type="button" id="scenePrev" aria-label="Previous slide"></button>
+              <span class="mono" id="sceneCount">01/01</span>
+              <button class="round glass" type="button" id="sceneNext" aria-label="Next slide"></button>
+            </div>
+            <span class="spacer"></span>
+            <button class="round glass" type="button" id="overlayBtn" aria-pressed="true" title="Highlight problem areas" aria-label="Highlight problem areas"></button>
+            <button class="round glass" type="button" id="fitBtn" aria-pressed="false" title="Fit to card" aria-label="Fit to card"></button>
+          </div>
+          <div class="busy mono" id="busy" hidden>Working…</div>
+        </article>
+
+        <article class="card verdict-card" id="verdictCard" aria-live="polite"></article>
+        <article class="card stat sky" id="statSmall"></article>
+        <article class="card stat dark" id="statFaint"></article>
+        <article class="card stat peach" id="statThird"></article>
+
+        <!-- Room controls -->
+        <article class="card ctl room-only" id="seatCard">
+          <div class="ctl-head"><span class="label">Where you sit</span></div>
+          <div class="seat-read"><span class="bignum" id="seatDist">9 m</span><span class="muted" id="seatRows"></span></div>
+          <div class="seatmap" id="seatMap"><div class="seatmap-screen">Screen</div><div id="seatRowsEl"></div></div>
+          <div class="seatkey muted small"><span><i class="k you"></i>You</span><span><i class="k taken"></i>Someone sitting</span><span><i class="k"></i>Empty</span></div>
+          <div class="seg wide" id="crowdSeg" aria-label="How full the room is"></div>
+        </article>
+        <article class="card ctl room-only">
+          <div class="ctl-head"><span class="label">Screen</span></div>
+          <div class="tiles two" id="screenTiles"></div>
+        </article>
+        <article class="card ctl room-only">
+          <div class="ctl-head"><span class="label">Room light</span></div>
+          <div class="tiles three" id="lightTiles"></div>
+        </article>
+
+        <!-- Call controls -->
+        <article class="card ctl call-only">
+          <div class="ctl-head"><span class="label">App</span></div>
+          <div class="tiles two" id="appTiles"></div>
+          <div class="ctl-head sub" id="layoutHead"><span class="label">View</span></div>
+          <div class="seg wide" id="layoutSeg"></div>
+        </article>
+        <article class="card ctl call-only">
+          <div class="ctl-head"><span class="label">Watching on</span></div>
+          <div class="tiles three" id="deviceTiles"></div>
+        </article>
+        <article class="card ctl call-only">
+          <div class="ctl-head"><span class="label">They receive</span></div>
+          <div class="tiles three" id="recvTiles"></div>
+          <div class="ctl-head sub"><span class="label">Screenshot scale</span></div>
+          <div class="seg wide" id="scaleSeg"></div>
+        </article>
+
+        <article class="card slides-card">
+          <div class="ctl-head">
+            <span class="label">Slides</span>
+            <span class="spacer"></span>
+            <span class="muted small" id="calibStatus"></span>
+            <button class="link" id="calibBtn" type="button">Calibrate</button>
+            <button class="btn small ghost" id="copyLinkBtn" type="button" hidden>Copy link</button>
+            <button class="btn small ghost" id="clearBtn" type="button">Start over</button>
+          </div>
+          <form class="linkform compact" id="linkForm2">
+            <input id="linkInput2" type="url" inputmode="url" placeholder="Add from a Google Slides, PDF or image link" aria-label="Link to more slides">
+            <button class="btn small primary" type="submit">Add</button>
+          </form>
+          <div class="thumbs" id="thumbs"></div>
+        </article>
+      </section>
+    </main>
+
+    <footer class="foot">Runs entirely in your browser. Nothing you add is uploaded.</footer>
+  </div>
 
   <dialog id="calibDlg">
     <form method="dialog" class="calib-form">
+      <span class="label">Calibrate</span>
       <h2>Match a card</h2>
       <p>Hold a credit card or ID card upright against your screen. Drag until the outline is exactly as wide as the card.</p>
-      <div class="card-stage"><div class="card" id="card"><span></span></div></div>
+      <div class="card-stage"><div class="idcard" id="card"><span></span></div></div>
       <input type="range" id="cardRange" min="120" max="380" step="1" aria-label="Card width">
       <div class="dlg-actions">
-        <button value="cancel" class="btn">Cancel</button>
+        <button value="cancel" class="btn ghost">Cancel</button>
         <button value="save" class="btn primary">Save</button>
       </div>
     </form>
