@@ -1,7 +1,7 @@
 // Turns a slide into what the audience actually gets: washed out by the room,
 // or downscaled and compressed by the call. Pure canvas work, nothing leaves the device.
 
-import { EYE_ARCMIN_PER_PX } from './presets.js';
+import { EYE_ARCMIN_PER_PX, stageBox } from './presets.js';
 
 export function makeCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -49,8 +49,11 @@ export function physical(c, w, h) {
     const sh = (sw * 9) / 16;
     return { W: Math.min(sw, sh * aspect), D: c.distance };
   }
-  const { width: vw, height: vh, distance } = c.viewer;
-  return { W: Math.min(vw, vh * aspect), D: distance };
+  // The shared screen fills the call window's stage, letterboxed.
+  const box = stageBox(c.app.id, c.device.id, c.layout.id);
+  const sw = c.device.width * box.w;
+  const sh = c.device.height * box.h;
+  return { W: Math.min(sw, sh * aspect), D: c.device.distance };
 }
 
 export function viewAngle(W, D) {

@@ -2,12 +2,12 @@
 
 See your slides and screen share the way your audience does.
 
-- **In the room:** pick the screen (55" TV to a 150" projector), the seat (front, middle, back) and the room light. Back Row draws the slide life size for that seat and washes it out the way a lit room does.
-- **On a call:** pick what viewers receive (1080p, 720p, 480p) and what they watch on (laptop, beside the gallery, phone). Back Row downscales and compresses your screenshot like a video call does.
+- **In the room:** pick your seat on a seat map (12 rows, 2 m to 13 m), the screen (55" TV to a 150" projector), the room light and how full the room is. Back Row draws the view from that seat life size: the screen on the far wall, washed out by the light, with the heads of the people sitting in front of you.
+- **On a call:** a Zoom-style or Teams-style window (generic look-alikes, no logos) on a laptop, a 24" monitor or a phone, at 1080p, 720p or 480p. Back Row downscales and compresses your screenshot the way a video call does.
 
 For every slide it tells you the **smallest font size that still reads** and highlights areas that are **too small** (red) or **too faint** (amber).
 
-Drop images or a PDF, or paste a screenshot. Everything runs in your browser; nothing is uploaded.
+Add slides by dropping images or a PDF, pasting a screenshot, or pasting a link: a Google Slides deck shared with "Anyone with the link", or a direct PDF or image URL. A linked deck gets a shareable Back Row link (`#src=...&slide=3`) that reopens it at the same slide. Everything runs in your browser; nothing is uploaded.
 
 **Live:** https://rohanpaldesign.github.io/back-row/
 

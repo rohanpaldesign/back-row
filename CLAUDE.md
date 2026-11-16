@@ -1,23 +1,27 @@
 # Back Row: project context
 
-A small, static web app: drop slides (images or PDF) or a screenshot and see them the way the audience does, in a room (distance + washout) or on a video call (downscale + JPEG compression). Live on GitHub Pages from `main` at https://rohanpaldesign.github.io/back-row/.
+A small, static web app: drop slides (images, PDF, a Google Slides link) or a screenshot and see them the way the audience does, in a room (distance, washout, heads in front) or on a video call (a Zoom-style or Teams-style window, downscale + JPEG compression). Live on GitHub Pages from `main` at https://rohanpaldesign.github.io/back-row/.
 
 ## Rules
-- Static only: plain HTML/CSS/ES modules, no build step, no package manager, no backend. Nothing the user adds may leave the browser.
-- The only third-party code is pdf.js 3.11.174 from cdnjs, loaded lazily in `app.js` when a PDF is added. Pin exact versions for anything new.
+- Static only: plain HTML/CSS/ES modules, no build step, no package manager, no backend. Nothing the user adds may leave the browser (fetching a link the user pasted, straight from its host, is fine).
+- The only third-party code is pdf.js 3.11.174 from cdnjs, loaded lazily in `app.js` when a PDF is added. Fonts (Inter, Inter Tight, JetBrains Mono) come from Google Fonts. Pin exact versions for anything new.
+- Call windows are generic look-alikes: never use Zoom or Microsoft logos, names in the UI chrome, or brand assets. Label them "Zoom-style" and "Teams-style".
 - Copy: no em dashes.
-- Light and dark themes via tokens in `styles.css` (`:root`, `prefers-color-scheme`, `[data-theme]`). Must work at 390px wide with no horizontal page scroll.
+- Bento UI: big numbers, 28px cards, light and dark themes via tokens in `styles.css` (`:root`, `prefers-color-scheme`, `[data-theme]`). Must work at 390px wide with no horizontal page scroll.
 
 ## Files
-- `presets.js`: every physical constant (screen sizes, seats, light levels, call profiles, legibility thresholds). Tune the model here.
+- `presets.js`: every physical constant: screens (with centre heights), room geometry (rows, seat spacing, rake, eye height), `CROWDS` + `seatTaken()` (the one seating chart shared by the seat map and the scene), light levels, call profiles, devices, and `stageBox()` (call window layout fractions used by both the CSS layout and `physical()`).
 - `simulate.js`: `simulate(src, cfg)` returns `{degraded, sizeOnly, theta, eye}`; `physical()` gives the slide's physical width and viewing distance; `resample()` is the high-quality resize used everywhere.
-- `legibility.js`: `analyze()` compares the slide with what the viewer perceives, cell by cell (total variation for "too small", luminance range for "too faint"); `minReadable()` gives the smallest readable font size from the viewing angle (capitals must cover `CAP_ARCMIN`).
-- `app.js`: input (drop, paste, file, PDF), state (persisted in localStorage under `backrow:`), rendering, thumbnails, calibration.
-- `sample.js`: the built-in test slide (text at 48/36/24/18/12px, hairlines, a light grey caption).
+- `legibility.js`: `analyze()` compares the slide with what the viewer perceives (Gaussian eye blur), cell by cell; `minReadable()` gives the smallest readable font size from the viewing angle.
+- `scene-room.js`: `renderRoom()` draws the first-person pinhole view from the seat (wall, screen, slide, overlay, people in painter's order).
+- `scene-call.js`: `renderCall()` builds the device frame and call window DOM and paints the shared screen canvas.
+- `icons.js`: inline SVG icons. `sample.js`: the built-in test slide.
+- `app.js`: input (drop, paste, file, PDF, links + `#src=` hash), state (localStorage under `backrow:`), seat map, cards, drag-to-pan, thumbnails, calibration.
 
 ## The model
-- The audience view is drawn life size for the user sitting `USER_DISTANCE` (60 cm) from their own screen: on-screen width = 0.6 x W / D, converted with px-per-mm from the credit-card calibration (default 4.2).
+- Scenes are drawn life size for the user sitting `USER_DISTANCE` (60 cm) from their own screen, using px-per-mm from the credit-card calibration (default 4.2). Call mode fits the device in the card by default (Fit button toggles life size); room mode is life size by default.
 - Readable: capital letter (0.7 x font size) covers 10 arcmin, times the light factor in rooms. Calls also need about 10px font at the received resolution.
+- Google Slides links are fetched as `/export/pdf` without cookies; this works (CORS allowed) for decks shared with "Anyone with the link".
 
 ## Verify changes
-Open the Pages URL (or `python -m http.server`), click "Try a sample": at Back, 9 m / 100" projector / Bright, the verdict is about 44px, so 48px passes and 36px fails. Moving to Front should drop it. Check call mode at 720p on a phone, a multi-page PDF, light and dark, and 390px width.
+Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sample": row 8 (9 m) / 100" projector / Bright gives about 44px with heads in front. Front row / 55" TV: no heads, the view pans. Dark: silhouettes. Change the crowd and check the seat map and the heads agree. Call: Zoom-style laptop at 720p, Teams-style side-by-side, phone. Paste a public Google Slides link. Check light and dark, and 390px width (iframe check).
