@@ -1,6 +1,6 @@
 // Finds where the audience loses detail, and the smallest font size that still reads.
 
-import { resample, physical } from './simulate.js';
+import { resample, physical, makeCanvas } from './simulate.js';
 import { CAP_ARCMIN } from './presets.js';
 
 const RAD_PER_ARCMIN = Math.PI / 180 / 60;
@@ -21,15 +21,32 @@ function luminance(canvas) {
   return L;
 }
 
-// What the viewer's eye resolves: squeeze to the eye's resolution, then back up to compare.
+// What the viewer's eye resolves: a Gaussian blur half an eye pixel wide.
+// (A blur changes smoothly with distance; squeezing to the eye's resolution
+// and back flickers as resize steps change.)
+const BLUR_PER_EYE_PX = 0.5;
+const SMALL_RATIO = 0.44;
+
 function perceive(img, eyeWidth, w, h) {
-  if (eyeWidth < w) {
+  const base = resample(img, w, h);
+  const sigma = (BLUR_PER_EYE_PX * w) / eyeWidth;
+  if (sigma < 0.25) return base;
+  const out = makeCanvas(w, h);
+  const x = out.getContext('2d');
+  if (!('filter' in x)) {
+    // Older browsers without canvas filters: squeeze and stretch instead.
     const small = resample(img, eyeWidth, (eyeWidth * img.height) / img.width);
     return resample(small, w, h);
   }
-  return resample(img, w, h);
+  x.drawImage(base, 0, 0);
+  x.filter = `blur(${sigma.toFixed(2)}px)`;
+  x.drawImage(base, 0, 0);
+  x.filter = 'none';
+  return out;
 }
 
+// Counts problem areas, treating cells up to two apart as one area so a line of
+// text counts once rather than once per gap between words.
 function countRegions(grid, cols, rows, type) {
   const seen = new Uint8Array(grid.length);
   let regions = 0;
@@ -42,8 +59,8 @@ function countRegions(grid, cols, rows, type) {
       const j = stack.pop();
       const x = j % cols;
       const y = (j / cols) | 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
           const nx = x + dx;
           const ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
@@ -115,7 +132,7 @@ export function analyze(src, sim) {
       const hasDetail = tvR / area > 6 && maxR - minR > 24;
       if (!hasDetail) continue;
       const k = cy * cols + cx;
-      if (tvS / tvR < 0.5) grid[k] = TOO_SMALL;
+      if (tvS / tvR < SMALL_RATIO) grid[k] = TOO_SMALL;
       else if (maxF - minF < 45) grid[k] = TOO_FAINT;
     }
   }
