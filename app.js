@@ -80,7 +80,7 @@ if (!(typeof state.pxPerMm === 'number' && state.pxPerMm > 1 && state.pxPerMm < 
 const el = Object.fromEntries([
   'empty', 'work', 'fileInput', 'fileInput2', 'sampleBtn', 'navSample', 'navAdd', 'themeBtn', 'clearBtn',
   'crumb', 'slideName', 'context',
-  'viewSeg', 'lifePill', 'viewport', 'scene', 'roomCv', 'callHost', 'panHint', 'overlayBtn', 'fitBtn', 'busy',
+  'viewSeg', 'viewport', 'scene', 'roomCv', 'callHost', 'panHint', 'overlayBtn', 'fitBtn', 'busy', 'sceneCard',
   'resultBody', 'modeTabs', 'resultTabLbl', 'slidesTabLbl', 'viewSceneBtn',
   'seatDist', 'seatRows', 'seatRowsEl', 'seatMap', 'scenePrev', 'sceneNext', 'sceneCount', 'sceneNav',
   'linkForm', 'linkInput', 'linkForm2', 'linkInput2', 'copyLinkBtn', 'screenTiles', 'lightTiles',
@@ -98,7 +98,6 @@ el.themeBtn.innerHTML = icon('theme', 18);
 el.scenePrev.innerHTML = icon('left', 20);
 el.sceneNext.innerHTML = icon('right', 20);
 el.overlayBtn.innerHTML = icon('eye', 19);
-el.fitBtn.innerHTML = icon('expand', 18);
 
 /* ---------- Side panel tabs ---------- */
 
@@ -326,12 +325,42 @@ el.viewSeg.addEventListener('click', (e) => {
   drawScene();
 });
 el.overlayBtn.addEventListener('click', () => { state.overlay = !state.overlay; changed({ recompute: false }); });
-const fitOn = () => (state.mode === 'call' ? state.fitCall : state.fitRoom);
+const fitOn = () => true;
+// The bottom-right button opens the view full screen.
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const canFullscreen = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+// Falls back to filling the browser window where full screen is refused or
+// missing (iPhone Safari).
+const isFull = () => !!fsEl() || el.sceneCard.classList.contains('max');
+function setMax(on) {
+  el.sceneCard.classList.toggle('max', on);
+  document.documentElement.classList.toggle('noscroll', on);
+  syncFullscreen();
+}
+function syncFullscreen() {
+  const on = isFull();
+  el.fitBtn.innerHTML = icon(on ? 'shrink' : 'expand', 18);
+  el.fitBtn.setAttribute('aria-pressed', String(on));
+  el.fitBtn.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+  el.fitBtn.dataset.tip = on ? 'Exit full screen (Esc)' : 'Full screen';
+}
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(ev, () => { syncFullscreen(); hideTip(); });
 el.fitBtn.addEventListener('click', () => {
-  if (state.mode === 'call') state.fitCall = !state.fitCall;
-  else state.fitRoom = !state.fitRoom;
-  changed({ recompute: false });
+  if (el.sceneCard.classList.contains('max')) return setMax(false);
+  if (fsEl()) return (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  const req = canFullscreen && (el.sceneCard.requestFullscreen || el.sceneCard.webkitRequestFullscreen);
+  if (!req) return setMax(true);
+  try {
+    const p = req.call(el.sceneCard);
+    if (p && p.catch) p.catch(() => setMax(true));
+  } catch {
+    setMax(true);
+  }
 });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && el.sceneCard.classList.contains('max')) setMax(false);
+});
+syncFullscreen();
 modeBtns.forEach((b) => b.addEventListener('click', () => {
   if (state.mode === b.dataset.mode) return;
   state.mode = b.dataset.mode;
@@ -352,7 +381,7 @@ function syncUI() {
   el.work.classList.toggle('mode-room', state.mode === 'room');
   el.work.classList.toggle('mode-call', state.mode === 'call');
   for (const b of el.viewSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === state.view));
-  el.fitBtn.hidden = state.view !== 'scene';
+  el.fitBtn.hidden = false;
   syncPressed(el.screenTiles, state.screen);
   syncPressed(el.lightTiles, state.light);
   syncPressed(el.appTiles, state.app);
@@ -371,13 +400,11 @@ function syncUI() {
   el.viewSceneBtn.dataset.tip = room ? 'The view from your seat' : 'The call window on their device';
   el.slidesTabLbl.textContent = state.slides.length ? `Slides ${state.slides.length}` : 'Slides';
   el.overlayBtn.setAttribute('aria-pressed', String(state.overlay));
-  el.fitBtn.setAttribute('aria-pressed', String(fitOn()));
+
   el.overlayBtn.dataset.tip = state.overlay
     ? 'Hide the highlights. Red marks text too small to read, amber marks text too faint.'
     : 'Highlight problem areas: red is too small to read, amber is too faint.';
-  el.fitBtn.dataset.tip = state.mode === 'call'
-    ? (state.fitCall ? 'Show actual size: the device as big as it really is in front of them' : 'Shrink the device to fit')
-    : (state.fitRoom ? 'Show actual size: the screen exactly as big as it looks from this seat' : 'Back to the normal view of the room');
+
   const cur = state.slides[state.idx];
   el.crumb.textContent = cur ? [cur.deck, crumbText()].filter(Boolean).join(' · ') : '';
   el.calibStatus.textContent = state.pxPerMm ? 'Screen calibrated' : 'Sizes assume a typical laptop';
@@ -474,10 +501,10 @@ function toSlideCanvas(source) {
   return out;
 }
 
-function addSlide(name, canvas, deck = '') {
+function addSlide(name, canvas, deck = '', ptWidth = 0) {
   if (state.slides.length >= MAX_SLIDES) return false;
   const thumb = resample(canvas, 336, (336 * canvas.height) / canvas.width);
-  state.slides.push({ name, deck, canvas, thumb, verdict: null, el: null, badge: null });
+  state.slides.push({ name, deck, ptWidth, canvas, thumb, verdict: null, el: null, badge: null });
   return true;
 }
 
@@ -524,7 +551,7 @@ async function addPdf(file, name = file.name) {
     x.fillStyle = '#ffffff';
     x.fillRect(0, 0, c.width, c.height);
     await page.render({ canvasContext: x, viewport: vp }).promise;
-    addSlide((await pageTitle(page)) || `Slide ${p}`, c, deck);
+    addSlide((await pageTitle(page)) || `Slide ${p}`, c, deck, vp1.width);
     page.cleanup();
   }
   doc.destroy();
@@ -891,18 +918,6 @@ function drawScene() {
   const scrollable = r.cssW > viewW + 1 || r.cssH > viewH + 1;
   el.panHint.hidden = !scrollable;
   el.viewport.classList.toggle('static', !scrollable);
-  el.lifePill.hidden = state.view !== 'scene';
-  const exact = state.pxPerMm ? '' : ' Calibrate under Slides to make it exact on this screen.';
-  if (r.scaled) {
-    el.lifePill.textContent = state.mode === 'room' ? 'Normal view' : 'Shrunk to fit';
-    el.lifePill.dataset.tip = state.mode === 'room'
-      ? 'Roughly what you take in from this seat. Use the expand button for actual size.'
-      : 'Shrunk so the whole device fits. Use the expand button for actual size.';
-  } else {
-    el.lifePill.textContent = 'Actual size';
-    el.lifePill.dataset.tip = `Drawn exactly as big as it looks from there, when you sit about an arm's length from this screen.${exact}`;
-  }
-  el.lifePill.classList.remove('warn');
 }
 
 function plural(n, word) {
@@ -916,40 +931,116 @@ function zoomNeeded() {
   return { zoom: Math.max(100, Math.ceil(((v / (UI_TEXT_PX * s)) * 100) / 10) * 10), s };
 }
 
+// Text size in points for the app the slide came from: a PDF page knows its
+// width in points (PowerPoint exports 960 pt wide, Google Slides 720 pt); a 16:9
+// image is assumed to be a PowerPoint slide.
+function slidePoints(slide, px) {
+  const w = slide.canvas.width;
+  const aspect = w / slide.canvas.height;
+  const ptW = slide.ptWidth || (aspect > 1.7 && aspect < 1.8 ? 960 : 0);
+  if (!ptW) return null;
+  return { pt: Math.max(1, Math.round((px * ptW) / w)), app: Math.abs(ptW - 720) < 2 ? 'Google Slides' : 'PowerPoint' };
+}
+
+const where = (box, a) => {
+  const cx = ((box.x0 + box.x1) / 2) / a.cols;
+  const cy = ((box.y0 + box.y1) / 2) / a.rows;
+  const v = cy < 0.34 ? 'Top' : cy > 0.66 ? 'Bottom' : 'Middle';
+  const h = cx < 0.34 ? 'left' : cx > 0.66 ? 'right' : '';
+  if (v === 'Middle') return h ? `${h[0].toUpperCase()}${h.slice(1)} side` : 'Middle';
+  return h ? `${v} ${h}` : `${v} centre`;
+};
+
+// A crop of the slide around one problem area, for the fix list.
+function areaCrop(slide, a, box) {
+  const k = slide.canvas.width / a.w;
+  const px = a.cell * k;
+  const pad = px * 0.8;
+  const x0 = Math.max(0, box.x0 * px - pad);
+  const y0 = Math.max(0, box.y0 * px - pad);
+  const x1 = Math.min(slide.canvas.width, box.x1 * px + pad);
+  const y1 = Math.min(slide.canvas.height, box.y1 * px + pad);
+  const tw = 112;
+  const th = 64;
+  const c = document.createElement('canvas');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = tw * dpr;
+  c.height = th * dpr;
+  c.className = 'fx-crop';
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, tw, th);
+  const s = Math.min(tw / (x1 - x0), th / (y1 - y0));
+  const dw = (x1 - x0) * s;
+  const dh = (y1 - y0) * s;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(slide.canvas, x0, y0, x1 - x0, y1 - y0, (tw - dw) / 2, (th - dh) / 2, dw, dh);
+  return c;
+}
+
 function renderVerdict() {
   if (!currentRes) return;
   const { slide, c, a, v } = currentRes;
-  const w = slide.canvas.width;
-  const h = slide.canvas.height;
   const colors = overlayColors();
-  let sub;
-  let third;
-  if (c.mode === 'room') {
-    const aspect = w / h;
-    const pt = Math.round((v * 960) / w);
-    sub = aspect > 1.7 && aspect < 1.8 ? `About ${pt}pt in a 16:9 PowerPoint deck` : `On this ${w}px-wide slide`;
-    const ppl = peopleAhead();
-    third = c.row === 0
-      ? '<li data-tip="Nobody sits between you and the screen"><span>Rows in front</span><b>None</b></li>'
-      : `<li data-tip="Rows of people between you and the screen; their heads can hide the bottom of the slide"><span>Rows in front</span><b>${c.row} <small>${peopleText(ppl)}</small></b></li>`;
-  } else {
-    const { zoom, s } = zoomNeeded();
-    sub = `In this ${w}px-wide screenshot`;
-    third = `<li data-tip="How far to zoom the window you share so ${UI_TEXT_PX}px interface text${s === 2 ? ' (28px in a 2x screenshot)' : ''} still reads"><span>Zoom to share at</span><b>${zoom}%</b></li>`;
-  }
-  const n = a.small + a.faint;
-  const status = n === 0
-    ? '<span class="status ok"><i></i>Reads fine</span>'
-    : `<span class="status bad"><i></i>${plural(n, 'problem')}</span>`;
-  el.resultTabLbl.textContent = `${v}px`;
-  document.getElementById('tab-result').dataset.tip = `Smallest readable text: ${v}px. ${n ? plural(n, 'problem area') : 'Everything reads'} from here.`;
+  const n = a.areas.length;
+  const size = slidePoints(slide, v);
+  const sizeText = size ? `${size.pt} pt` : `${v} px`;
+  const room = c.mode === 'room';
+  const zoom = room ? null : zoomNeeded().zoom;
+
+  // Tab label: how many fixes.
+  el.resultTabLbl.innerHTML = n ? `Fixes <b class="fx-count">${n}</b>` : 'Fixes';
+  document.getElementById('tab-result').dataset.tip = n
+    ? `${plural(n, 'part')} of this slide ${n === 1 ? 'is' : 'are'} hard to read from here. See what to change.`
+    : 'Everything on this slide reads from here';
+
+  const smallFix = size
+    ? `Make it at least ${size.pt} pt in ${size.app}, or cut words so it fits at that size.`
+    : `Make it at least ${v} px tall in this image, or cut words so it fits at that size.`;
+  const faintFix = room && c.lightId !== 'dark'
+    ? 'The room light washes it out. Use darker text, or a plainer, higher-contrast background behind it.'
+    : 'Not enough contrast. Use darker text, or a plainer, higher-contrast background behind it.';
+
+  // General advice that fits this slide and this setting.
+  const advice = [];
+  if (a.small >= 3) advice.push(['Cut words, not size', `${plural(a.small, 'part')} ${a.small === 1 ? 'is' : 'are'} too small. One idea per slide lets every line stay at ${sizeText} or more.`]);
+  if (a.small >= 2) advice.push(['Label charts directly', 'Put values and names on the chart in large text instead of small legends, axis numbers and footnotes.']);
+  if (a.faint) advice.push(['Raise the contrast', room && c.lightId === 'bright'
+    ? 'A bright room fades pale colours. Use dark text on white, or white on near-black, and skip light grey.'
+    : 'Pale text on a pale background disappears. Use dark text on white, or white on near-black.']);
+  if (room && c.row >= 15) advice.push(['Keep the bottom clear', 'From the back, heads hide the bottom of the screen. Keep anything important out of the lowest sixth of the slide.']);
+  if (!room && zoom > 100) advice.push([`Zoom to ${zoom}% before sharing`, 'Zoom the window you share (Ctrl or Cmd and +) so its text survives the call’s compression. Sharing one window instead of the whole screen helps too.']);
+  if (!room && c.device.id !== 'phone') advice.push(['Check on a phone', 'People who join from a phone see it far smaller. Pick Phone under Device to test.']);
+  if (!n) advice.push(['Try a harder seat', room ? 'Pick a seat further back or at the end of a row, or a brighter room, to see where it starts to fail.' : 'Try 480p or a phone to see where it starts to fail.']);
+
+  const groups = [
+    { label: 'Text too small', fix: smallFix, color: colors.small, list: a.areas.filter((r) => r.type === 1) },
+    { label: 'Too faint', fix: faintFix, color: colors.faint, list: a.areas.filter((r) => r.type === 2) },
+  ].filter((g) => g.list.length);
+  const crops = [];
   el.resultBody.innerHTML = `
-    <div class="res-main" data-tip="Text smaller than this can't be read from here. Measured on the slide's own pixels."><span class="midnum">${v}<small>px</small></span><span class="muted">${sub}</span>${status}</div>
-    <ul class="metrics">
-      <li data-tip="Areas of text too small to make out from here (red on the slide)"><span><i class="dot" style="background:${colors.small}"></i>Too small</span><b>${a.small} <small>${a.small === 1 ? 'area' : 'areas'}</small></b></li>
-      <li data-tip="Areas too low in contrast once the light washes the picture out (amber on the slide)"><span><i class="dot" style="background:${colors.faint}"></i>Too faint</span><b>${a.faint} <small>${a.faint === 1 ? 'area' : 'areas'}</small></b></li>
-      ${third}
-    </ul>`;
+    <div class="fx-head">
+      ${n ? '<span class="status bad"><i></i>Needs work</span>' : '<span class="status ok"><i></i>Reads fine</span>'}
+      <h3 class="fx-title">${n ? `${plural(n, 'part')} of this slide ${n === 1 ? 'is' : 'are'} hard to read from here` : 'Everything on this slide reads from here'}</h3>
+    </div>
+    <div class="fx-rule" data-tip="${size ? `For this slide, made in ${size.app}` : 'Measured on this image’s own pixels'}">
+      <span class="label">Smallest text that reads from here</span>
+      <span class="fx-size">${sizeText}</span>
+      <span class="muted small">${size ? `font size in ${size.app}` : 'text height in this image'}</span>
+    </div>
+    ${groups.map((g) => `
+      <section class="fx-group">
+        <b class="fx-gh"><i class="dot" style="background:${g.color}"></i>${g.label} <span class="muted">· ${plural(g.list.length, 'place')}</span></b>
+        <p class="fx-fix">${g.fix}</p>
+        <div class="fx-grid">${g.list.slice(0, 9).map((box) => {
+          crops.push(box);
+          return `<figure class="fx-item"><span class="fx-thumb" data-i="${crops.length - 1}"></span><figcaption>${where(box, a)}</figcaption></figure>`;
+        }).join('')}</div>
+        ${g.list.length > 9 ? `<p class="muted small">And ${g.list.length - 9} more, marked on the slide.</p>` : ''}
+      </section>`).join('')}
+    ${advice.length ? `<span class="label">${n ? 'Also' : 'Next'}</span><ul class="advice">${advice.map(([t, d]) => `<li><b>${t}</b><p>${d}</p></li>`).join('')}</ul>` : ''}`;
+  for (const t of el.resultBody.querySelectorAll('.fx-thumb')) t.appendChild(areaCrop(slide, a, crops[Number(t.dataset.i)]));
 }
 
 /* ---------- Tooltips ---------- */
