@@ -19,7 +19,7 @@ A small, static web app: drop slides (images, PDF, a Google Slides link) or a sc
 - `app.js`: input (drop, paste, file, PDF, links + `#src=` hash), state (localStorage under `backrow:`), seat map, cards, drag-to-pan, thumbnails, calibration.
 
 ## The model
-- Scenes are drawn life size for the user sitting `USER_DISTANCE` (60 cm) from their own screen, using px-per-mm from the credit-card calibration (default 4.2). Call mode fits the device in the card by default (Fit button toggles life size); room mode is life size by default.
+- Scenes are drawn life size for the user sitting `USER_DISTANCE` (60 cm) from their own screen, using px-per-mm from the credit-card calibration (default 4.2). Call mode fits the device in the card by default; room mode opens in the normal view (about 70 degrees across). The expand button switches to actual size. The top-right pill uses plain words only: "Normal view", "Shrunk to fit" or "Actual size" (no percentages or jargon).
 - Readable: capital letter (0.7 x font size) covers 10 arcmin, times the light factor in rooms. Calls also need about 10px font at the received resolution.
 - Google Slides links are fetched as `/export/pdf` without cookies; this works (CORS allowed) for decks shared with "Anyone with the link".
 
@@ -29,6 +29,6 @@ Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sampl
 ## Room view in 3D (v6)
 - The camera sits at the seat and turns to face the screen centre (`renderRoom`: `cam()` yaw, `path3()`/`poly3()` clip polygons to the near plane). The slide is drawn in thin vertical strips so it takes the screen's perspective. Rows are painted far to near; within a row, seats are sorted far to near along the view.
 - The verdict counts the side angle: distance = hypot(row distance, side offset) / sqrt(cos angle).
-- Screens are mounted on the stage (`center` is above the front floor), and the floor rises `RAKE` 0.12 m a row. Rows are 0.9 m apart, starting 3 m from the screen; the default screen is 300". The row just ahead leans out of your sight line and the head two rows ahead sits in it. From the back rows, that head covers roughly the bottom 12-18% of the screen; nearer rows see it all. Check with a quick node script before changing RAKE or the screen heights.
+- Screens are mounted on the stage (`center` is above the front floor), and the floor rises `RAKE` 0.12 m a row. Rows are 0.9 m apart, starting 3 m from the screen; the default screen is 240". The row just ahead leans out of your sight line and the head two rows ahead sits in it. From the back rows, that head covers roughly the bottom 12-18% of the screen; nearer rows see it all. Check with a quick node script before changing RAKE or the screen heights.
 - The front row is 3 m back (`FIRST_ROW`). The room view opens in the natural view (about 70 degrees across, `fitRoom`, default on). The expand button switches to life size.
 - The seating plan is a map bigger than the panel: drag to pan (a drag never picks a seat), and it centres on your seat when the Seat tab opens.
