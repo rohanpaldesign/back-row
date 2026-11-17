@@ -25,3 +25,10 @@ A small, static web app: drop slides (images, PDF, a Google Slides link) or a sc
 
 ## Verify changes
 Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sample": row 8 (9 m) / 100" projector / Bright gives about 44px with heads in front. Front row / 55" TV: no heads, the view pans. Dark: silhouettes. Check the seat map dots and the heads agree; the Fit button shows the whole room. Hover controls for tooltips; pasting a link shows the loading pill. Call: Zoom-style laptop at 720p, Teams-style side-by-side, phone. Paste a public Google Slides link. Check light and dark, and 390px width (iframe check).
+
+## Room view in 3D (v6)
+- The camera sits at the seat and turns to face the screen centre (`renderRoom`: `cam()` yaw, `path3()`/`poly3()` clip polygons to the near plane). The slide is drawn in thin vertical strips so it takes the screen's perspective. Rows are painted far to near; within a row, seats are sorted far to near along the view.
+- The verdict counts the side angle: distance = hypot(row distance, side offset) / sqrt(cos angle).
+- Screens are mounted on the stage (`center` is above the front floor), and the floor rises `RAKE` 0.14 m a row. The row just ahead leans out of your sight line and the head two rows ahead sits in it. From about row 22 back, that head covers roughly the bottom 10-20% of a 100" screen; nearer rows see it all. Check with a quick node script before changing RAKE or the screen heights.
+- The front row is 4 m back (`FIRST_ROW`). The room view opens in the natural view (about 70 degrees across, `fitRoom`, default on). The expand button switches to life size.
+- The seating plan is a map bigger than the panel: drag to pan (a drag never picks a seat), and it centres on your seat when the Seat tab opens.
