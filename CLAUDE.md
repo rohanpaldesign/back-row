@@ -37,3 +37,10 @@ Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sampl
 - The first side tab is **Fixes** (badge = number of problem parts). `renderVerdict()` builds it: a headline, the smallest readable text **in points for the app the slide came from** (`slidePoints()`: a PDF page's own width in points, so 960 pt for PowerPoint or 720 pt for Google Slides; a 16:9 image is assumed to be PowerPoint), then problems grouped by type, each with one plain fix sentence and crops of where it happens (`areaCrop()`, located as "Top left" and so on), then context advice (cut words, label charts, contrast in a bright room, keep the bottom clear from the back, zoom before sharing, test on a phone).
 - `analyze()` returns `areas` (boxes in grid cells; `mergeNear()` joins pieces of the same line) plus `small`/`faint` counts.
 - Write all UI copy in plain words: no px/pt jargon without saying what it means, and no percentages of "life size".
+
+## Issues across the whole room (v10)
+- The Fixes panel doesn't depend on your seat. `computeRange()` runs `analyze()` at every other row (centre seat) for the current screen and light, or on a monitor, laptop and phone for the current call setup. The washout or compression is simulated once; only the viewing angle changes. The result is cached on `slide.range`, keyed by `rangeKey()`.
+- Issues start from the problem areas at the worst seat, split into text lines (bands of grid rows). Each line gets the first seat where 30% of its cells fail; lines in one area that fail at the same seat are merged.
+- Each issue says, in plain words, up to which row (and metres) it reads, or which devices can't read it, with a 30-row bar or device chips. The summary says who can read the whole slide. Advice gives the size the back row (or phones) needs, in PowerPoint or Google Slides points.
+- Slide badges count issues for the room or call setup (worst seat), not your seat.
+- The "What they see" view was removed: Rohan said a distance blur is not accurate. The views are Room/Call and Your slide.

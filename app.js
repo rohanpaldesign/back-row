@@ -4,8 +4,8 @@ import {
   CARD_SHORT_MM, CARD_LONG_MM, DEFAULT_PX_PER_MM,
   UI_TEXT_PX, MAX_SLIDE_WIDTH, MAX_SLIDES,
 } from './presets.js';
-import { simulate, resample, makeCanvas } from './simulate.js';
-import { analyze, minReadable, perceivedImage } from './legibility.js';
+import { simulate, resample, makeCanvas, physical, viewAngle } from './simulate.js';
+import { analyze, minReadable } from './legibility.js';
 import { drawSample } from './sample.js';
 import { renderRoom } from './scene-room.js';
 import { renderCall } from './scene-call.js';
@@ -748,12 +748,12 @@ function syncThumbs() {
 
 function updateBadge(s) {
   if (!s.badge) return;
-  const v = s.verdict;
-  if (v && v.key === cfg().key) {
-    const n = v.small + v.faint;
+  const v = s.worst;
+  if (v && v.key === rangeKey(cfg())) {
+    const n = v.n;
     s.badge.textContent = n ? String(n) : '✓';
     s.badge.className = 'badge ' + (n ? 'bad' : 'ok');
-    s.el.dataset.tip = `${s.name}: ${n ? `${n} problem area${n === 1 ? '' : 's'} from here` : 'reads fine from here'}`;
+    s.el.dataset.tip = `${s.name}: ${n ? `${n} part${n === 1 ? '' : 's'} hard to read for some of the audience` : 'everyone can read it'}`;
   } else {
     s.badge.textContent = '';
     s.badge.className = 'badge';
@@ -804,11 +804,13 @@ async function renderCurrent() {
     const a = analyze(slide.canvas, sim);
     const v = minReadable(slide.canvas.width, slide.canvas.height, c);
     if (token !== renderToken) return;
-    slide.verdict = { key: c.key, small: a.small, faint: a.faint };
-    updateBadge(slide);
     currentRes = { slide, c, sim, a, v };
     renderVerdict();
     drawScene();
+    if (!slide.range || slide.range.key !== rangeKey(c)) {
+      await computeRange(slide, c, token);
+      if (token === renderToken && currentRes && currentRes.slide === slide) renderVerdict();
+    }
   } catch (err) {
     console.error(err);
     toast('Something went wrong drawing that slide.');
@@ -891,8 +893,7 @@ function drawScene() {
     el.callHost.hidden = true;
     el.callHost.innerHTML = '';
     el.roomCv.hidden = false;
-    if (state.view === 'see' && !currentRes.seen) currentRes.seen = perceivedImage(slide.canvas, sim, 1600);
-    r = renderCloseUp(el.roomCv, state.view === 'see' ? currentRes.seen : slide.canvas, a, viewW, viewH);
+    r = renderCloseUp(el.roomCv, slide.canvas, a, viewW, viewH);
   } else if (c.mode === 'room') {
     el.callHost.hidden = true;
     el.callHost.innerHTML = '';
@@ -931,6 +932,92 @@ function zoomNeeded() {
   return { zoom: Math.max(100, Math.ceil(((v / (UI_TEXT_PX * s)) * 100) / 10) * 10), s };
 }
 
+/* ---------- Every seat, every device ---------- */
+
+// The issues depend on the room (screen, light) or the call (app, view,
+// quality), not on where you sit, so they are worked out across all seats.
+function rangeKey(c) {
+  return c.mode === 'room' ? `room|${c.screen.id}|${c.lightId}` : `call|${c.app.id}|${c.layout.id}|${c.recv.id}`;
+}
+function stepsFor(c) {
+  if (c.mode === 'room') {
+    const rows = [];
+    for (let r = 0; r < ROWS; r += 2) rows.push(r);
+    if (rows[rows.length - 1] !== ROWS - 1) rows.push(ROWS - 1);
+    return rows.map((r) => ({ row: r, cfg: { ...c, row: r, distance: seatDistance(r), offset: 0 } }));
+  }
+  return ['monitor', 'laptop', 'phone'].map((id) => ({ device: byId(DEVICES, id), cfg: { ...c, device: byId(DEVICES, id) } }));
+}
+
+async function computeRange(slide, c, token) {
+  const key = rangeKey(c);
+  const steps = stepsFor(c);
+  const w = slide.canvas.width;
+  const h = slide.canvas.height;
+  // The washout or compression is the same at every seat; only the size changes.
+  const base = await simulate(slide.canvas, steps[0].cfg);
+  const out = [];
+  for (const st of steps) {
+    await new Promise((r) => setTimeout(r, 0)); // keep the page responsive
+    if (token !== renderToken) return null;
+    const { W, D } = physical(st.cfg, w, h);
+    out.push({ ...st, a: analyze(slide.canvas, { ...base, theta: viewAngle(W, D) }), v: minReadable(w, h, st.cfg) });
+  }
+  const worst = out[out.length - 1].a;
+  // Each cell's first failing seat, then areas of cells that fail at the same
+  // seat, so lines of different sizes come out as separate issues.
+  const { cols, rows } = worst;
+  const first = new Int16Array(cols * rows).fill(-1);
+  const kind = new Uint8Array(cols * rows);
+  out.forEach((st, i) => {
+    st.a.grid.forEach((t, j) => {
+      if (t && first[j] < 0) {
+        first[j] = i;
+        kind[j] = t;
+      }
+    });
+  });
+  // Start from the problem areas at the worst seat, split each into its lines
+  // of text, and give each line the seat where most of it has failed. Lines
+  // in the same area that fail at the same seat (like chart labels) stay one issue.
+  const issues = [];
+  for (const area of worst.areas) {
+    const bands = [];
+    let cur = null;
+    for (let y = area.y0; y < area.y1; y++) {
+      const cells = [];
+      for (let x = area.x0; x < area.x1; x++) if (worst.grid[y * cols + x]) cells.push(y * cols + x);
+      if (!cells.length) { cur = null; continue; }
+      if (!cur) bands.push((cur = []));
+      cur.push(...cells);
+    }
+    const byFirst = new Map();
+    for (const cells of bands) {
+      const f = cells.map((j) => (first[j] < 0 ? out.length - 1 : first[j])).sort((p, q) => p - q);
+      const at = f[Math.floor(f.length * 0.3)];
+      if (!byFirst.has(at)) byFirst.set(at, []);
+      byFirst.get(at).push(...cells);
+    }
+    for (const [at, cells] of byFirst) {
+      const box = { type: area.type, x0: cols, y0: rows, x1: 0, y1: 0, cells: cells.length };
+      for (const j of cells) {
+        const x = j % cols;
+        const y = (j / cols) | 0;
+        box.x0 = Math.min(box.x0, x);
+        box.y0 = Math.min(box.y0, y);
+        box.x1 = Math.max(box.x1, x + 1);
+        box.y1 = Math.max(box.y1, y + 1);
+      }
+      issues.push({ box, first: at });
+    }
+  }
+  issues.sort((p, q) => p.first - q.first || q.box.cells - p.box.cells);
+  slide.range = { key, steps: out, issues, worst };
+  slide.worst = { key, n: issues.length };
+  updateBadge(slide);
+  return slide.range;
+}
+
 // Text size in points for the app the slide came from: a PDF page knows its
 // width in points (PowerPoint exports 960 pt wide, Google Slides 720 pt); a 16:9
 // image is assumed to be a PowerPoint slide.
@@ -951,7 +1038,7 @@ const where = (box, a) => {
   return h ? `${v} ${h}` : `${v} centre`;
 };
 
-// A crop of the slide around one problem area, for the fix list.
+// A crop of the slide around one problem area.
 function areaCrop(slide, a, box) {
   const k = slide.canvas.width / a.w;
   const px = a.cell * k;
@@ -979,68 +1066,86 @@ function areaCrop(slide, a, box) {
   return c;
 }
 
+const fmtM = (m) => `${Math.round(m * 10) / 10} m`;
+
 function renderVerdict() {
   if (!currentRes) return;
-  const { slide, c, a, v } = currentRes;
-  const colors = overlayColors();
-  const n = a.areas.length;
-  const size = slidePoints(slide, v);
-  const sizeText = size ? `${size.pt} pt` : `${v} px`;
+  const { slide, c } = currentRes;
   const room = c.mode === 'room';
-  const zoom = room ? null : zoomNeeded().zoom;
+  const range = slide.range && slide.range.key === rangeKey(c) ? slide.range : null;
+  const setup = room
+    ? `${c.screen.label} ${c.screen.sub.toLowerCase()}, ${c.light.label.toLowerCase()} room, ${ROWS} rows`
+    : `${c.app.label} call at ${c.recv.label}`;
+  if (!range) {
+    el.resultTabLbl.textContent = 'Fixes';
+    el.resultBody.innerHTML = `<p class="muted fx-wait"><span class="spin"></span>Checking ${room ? 'every seat' : 'every device'}…</p>`;
+    return;
+  }
+  const { steps, issues, worst } = range;
+  const n = issues.length;
+  const colors = overlayColors();
+  const last = steps[steps.length - 1];
+  const need = slidePoints(slide, last.v);
+  const needText = need ? `${need.pt} pt` : `${last.v} px`;
 
-  // Tab label: how many fixes.
+  // Where each issue stops being readable, in plain words.
+  const reach = (first) => {
+    if (room) {
+      if (first === 0) return { short: 'Hard to read even from the front row', ok: -1 };
+      const ok = steps[first - 1].row;
+      return { short: `Readable up to row ${ok + 1} (${fmtM(seatDistance(ok))}), hard to read behind that`, ok };
+    }
+    const bad = steps.slice(first).map((st) => `${st.device.label.toLowerCase()}s`);
+    return { short: first === 0 ? 'Hard to read on every device' : `Hard to read on ${bad.join(' and ')}`, ok: first - 1 };
+  };
+  const bar = (ok) => room
+    ? `<span class="fx-bar" aria-hidden="true">${Array.from({ length: ROWS }, (_, r) => `<i class="${r <= ok ? 'g' : 'r'}"></i>`).join('')}</span>`
+    : `<span class="fx-devs">${steps.map((st, i) => `<span class="${i <= ok ? 'g' : 'r'}">${st.device.label}</span>`).join('')}</span>`;
+
+  let summary;
+  if (!n) summary = room ? `Every seat can read the whole slide, even the back row (${fmtM(seatDistance(ROWS - 1))} away).` : 'It reads on a monitor, a laptop and a phone.';
+  else if (issues[0].first === 0) summary = room ? `Even the front row will struggle with ${issues.filter((i) => i.first === 0).length === n ? (n === 1 ? 'it' : 'all of them') : `${plural(issues.filter((i) => i.first === 0).length, 'part')}`}.` : `${plural(issues.filter((i) => i.first === 0).length, 'part')} ${issues.filter((i) => i.first === 0).length === 1 ? 'is' : 'are'} hard to read even on a big monitor.`;
+  else summary = room ? `Everyone up to row ${steps[issues[0].first - 1].row + 1} (${fmtM(seatDistance(steps[issues[0].first - 1].row))}) can read the whole slide.` : `Everything reads on ${steps.slice(0, issues[0].first).map((st) => `a ${st.device.label.toLowerCase()}`).join(' and ')}. The issues below show up on smaller screens.`;
+
   el.resultTabLbl.innerHTML = n ? `Fixes <b class="fx-count">${n}</b>` : 'Fixes';
-  document.getElementById('tab-result').dataset.tip = n
-    ? `${plural(n, 'part')} of this slide ${n === 1 ? 'is' : 'are'} hard to read from here. See what to change.`
-    : 'Everything on this slide reads from here';
+  document.getElementById('tab-result').dataset.tip = n ? `${plural(n, 'part')} of this slide ${n === 1 ? 'is' : 'are'} hard to read for some of the audience` : 'Everyone can read this slide';
 
-  const smallFix = size
-    ? `Make it at least ${size.pt} pt in ${size.app}, or cut words so it fits at that size.`
-    : `Make it at least ${v} px tall in this image, or cut words so it fits at that size.`;
-  const faintFix = room && c.lightId !== 'dark'
-    ? 'The room light washes it out. Use darker text, or a plainer, higher-contrast background behind it.'
-    : 'Not enough contrast. Use darker text, or a plainer, higher-contrast background behind it.';
-
-  // General advice that fits this slide and this setting.
   const advice = [];
-  if (a.small >= 3) advice.push(['Cut words, not size', `${plural(a.small, 'part')} ${a.small === 1 ? 'is' : 'are'} too small. One idea per slide lets every line stay at ${sizeText} or more.`]);
-  if (a.small >= 2) advice.push(['Label charts directly', 'Put values and names on the chart in large text instead of small legends, axis numbers and footnotes.']);
-  if (a.faint) advice.push(['Raise the contrast', room && c.lightId === 'bright'
+  const small = issues.filter((i) => i.box.type === 1).length;
+  const faint = n - small;
+  if (small) advice.push([`Make text at least ${needText}`, room
+    ? `That is the size the back row can read${need ? ` (font size in ${need.app})` : ''}. If it doesn't fit, cut words: one idea per slide.`
+    : `That is the size people on phones can read${need ? ` (font size in ${need.app})` : ''}. If it doesn't fit, cut words: one idea per slide.`]);
+  if (small >= 2) advice.push(['Label charts directly', 'Put values and names on the chart in large text instead of small legends, axis numbers and footnotes.']);
+  if (faint) advice.push(['Raise the contrast', room && c.lightId === 'bright'
     ? 'A bright room fades pale colours. Use dark text on white, or white on near-black, and skip light grey.'
     : 'Pale text on a pale background disappears. Use dark text on white, or white on near-black.']);
-  if (room && c.row >= 15) advice.push(['Keep the bottom clear', 'From the back, heads hide the bottom of the screen. Keep anything important out of the lowest sixth of the slide.']);
-  if (!room && zoom > 100) advice.push([`Zoom to ${zoom}% before sharing`, 'Zoom the window you share (Ctrl or Cmd and +) so its text survives the call’s compression. Sharing one window instead of the whole screen helps too.']);
-  if (!room && c.device.id !== 'phone') advice.push(['Check on a phone', 'People who join from a phone see it far smaller. Pick Phone under Device to test.']);
-  if (!n) advice.push(['Try a harder seat', room ? 'Pick a seat further back or at the end of a row, or a brighter room, to see where it starts to fail.' : 'Try 480p or a phone to see where it starts to fail.']);
+  if (room && issues.some((i) => i.box.y1 > worst.rows * 0.84)) advice.push(['Keep the bottom clear', 'From the back rows, heads hide the bottom of the screen. Move anything important higher up.']);
+  if (!room) {
+    const z = Math.max(100, Math.ceil(((last.v / UI_TEXT_PX) * 100) / 10) * 10);
+    if (z > 100) advice.push([`Zoom to ${z}% before sharing`, 'Zoom the window you share (Ctrl or Cmd and +) so its text survives on small screens. Share one window, not the whole screen.']);
+  }
 
-  const groups = [
-    { label: 'Text too small', fix: smallFix, color: colors.small, list: a.areas.filter((r) => r.type === 1) },
-    { label: 'Too faint', fix: faintFix, color: colors.faint, list: a.areas.filter((r) => r.type === 2) },
-  ].filter((g) => g.list.length);
-  const crops = [];
   el.resultBody.innerHTML = `
     <div class="fx-head">
       ${n ? '<span class="status bad"><i></i>Needs work</span>' : '<span class="status ok"><i></i>Reads fine</span>'}
-      <h3 class="fx-title">${n ? `${plural(n, 'part')} of this slide ${n === 1 ? 'is' : 'are'} hard to read from here` : 'Everything on this slide reads from here'}</h3>
+      <h3 class="fx-title">${n ? `${plural(n, 'part')} of this slide ${n === 1 ? 'is' : 'are'} hard to read` : 'Everyone can read this slide'}</h3>
+      <p class="fx-sum">${summary}</p>
+      <p class="muted small">${setup}. Change it under ${room ? 'Room setup' : 'Call setup'}.</p>
     </div>
-    <div class="fx-rule" data-tip="${size ? `For this slide, made in ${size.app}` : 'Measured on this image’s own pixels'}">
-      <span class="label">Smallest text that reads from here</span>
-      <span class="fx-size">${sizeText}</span>
-      <span class="muted small">${size ? `font size in ${size.app}` : 'text height in this image'}</span>
-    </div>
-    ${groups.map((g) => `
-      <section class="fx-group">
-        <b class="fx-gh"><i class="dot" style="background:${g.color}"></i>${g.label} <span class="muted">· ${plural(g.list.length, 'place')}</span></b>
-        <p class="fx-fix">${g.fix}</p>
-        <div class="fx-grid">${g.list.slice(0, 9).map((box) => {
-          crops.push(box);
-          return `<figure class="fx-item"><span class="fx-thumb" data-i="${crops.length - 1}"></span><figcaption>${where(box, a)}</figcaption></figure>`;
-        }).join('')}</div>
-        ${g.list.length > 9 ? `<p class="muted small">And ${g.list.length - 9} more, marked on the slide.</p>` : ''}
-      </section>`).join('')}
-    ${advice.length ? `<span class="label">${n ? 'Also' : 'Next'}</span><ul class="advice">${advice.map(([t, d]) => `<li><b>${t}</b><p>${d}</p></li>`).join('')}</ul>` : ''}`;
-  for (const t of el.resultBody.querySelectorAll('.fx-thumb')) t.appendChild(areaCrop(slide, a, crops[Number(t.dataset.i)]));
+    ${n ? `<span class="label">Issues, worst first</span><ol class="issues">${issues.slice(0, 10).map((it, i) => {
+      const r = reach(it.first);
+      return `<li class="issue">
+        <span class="fx-thumb" data-i="${i}"></span>
+        <div class="fx-text">
+          <b><i class="dot" style="background:${it.box.type === 1 ? colors.small : colors.faint}"></i>${it.box.type === 1 ? 'Text too small' : 'Too faint'} <span class="muted">· ${where(it.box, worst)}</span></b>
+          <p>${r.short}</p>
+          ${bar(r.ok)}
+        </div>
+      </li>`;
+    }).join('')}</ol>${n > 10 ? `<p class="muted small">And ${n - 10} more, marked on the slide.</p>` : ''}` : ''}
+    ${advice.length ? `<span class="label">How to fix it</span><ul class="advice">${advice.map(([t, d]) => `<li><b>${t}</b><p>${d}</p></li>`).join('')}</ul>` : ''}`;
+  for (const t of el.resultBody.querySelectorAll('.fx-thumb')) t.appendChild(areaCrop(slide, worst, issues[Number(t.dataset.i)].box));
 }
 
 /* ---------- Tooltips ---------- */
@@ -1093,14 +1198,17 @@ async function backgroundVerdicts() {
   const c = cfg();
   for (const s of state.slides) {
     if (run !== bgRun) return;
-    if (s.verdict && s.verdict.key === c.key) continue;
+    const key = rangeKey(c);
+    if (s.worst && s.worst.key === key) continue;
     await idle();
     if (run !== bgRun) return;
     try {
-      const sim = await simulate(s.canvas, c);
+      const steps = stepsFor(c);
+      const last = steps[steps.length - 1].cfg;
+      const sim = await simulate(s.canvas, last);
       if (run !== bgRun) return;
       const a = analyze(s.canvas, sim);
-      s.verdict = { key: c.key, small: a.small, faint: a.faint };
+      s.worst = { key, n: a.areas.length };
       updateBadge(s);
     } catch (err) {
       console.warn(err);

@@ -89,8 +89,7 @@
           <div class="scene-top">
             <div class="seg" id="viewSeg">
               <button type="button" data-view="scene" id="viewSceneBtn" data-tip="The view from your seat">Room</button>
-              <button type="button" data-view="see" data-tip="What your audience actually takes in, enlarged so you can inspect it: blurred by distance, washed out by the light or by video compression">What they see</button>
-              <button type="button" data-view="original" data-tip="Your slide as you made it, enlarged the same way, to compare with what they see">Your slide</button>
+              <button type="button" data-view="original" data-tip="Your slide on its own, enlarged, with the hard-to-read parts marked">Your slide</button>
             </div>
           </div>
           <div class="viewport" id="viewport"><div class="scene" id="scene"><canvas id="roomCv"></canvas><div class="callhost" id="callHost"></div></div></div>
@@ -111,7 +110,7 @@
 
         <aside class="card side" id="side" aria-label="Settings and results">
           <div class="sidetabs" role="tablist" aria-label="Panels">
-            <button type="button" role="tab" data-tab="result" id="tab-result" aria-controls="panel-result" data-tip="What to change on this slide so it reads from here">
+            <button type="button" role="tab" data-tab="result" id="tab-result" aria-controls="panel-result" data-tip="Every issue on this slide, and which seats can't read it">
               <span class="ti" data-icon="gauge"></span><span class="tl" id="resultTabLbl">Fixes</span>
             </button>
             <button type="button" role="tab" data-tab="where" id="tab-where" aria-controls="panel-where">
