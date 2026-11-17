@@ -44,3 +44,7 @@ Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sampl
 - Each issue says, in plain words, up to which row (and metres) it reads, or which devices can't read it, with a 30-row bar or device chips. The summary says who can read the whole slide. Advice gives the size the back row (or phones) needs, in PowerPoint or Google Slides points.
 - Slide badges count issues for the room or call setup (worst seat), not your seat.
 - The "What they see" view was removed: Rohan said a distance blur is not accurate. The views are Room/Call and Your slide.
+
+## Pictures are not text (v11)
+- `pictureCells()` in legibility.js skips emoji, coloured icons and photos, so their fine detail isn't reported as unreadable text. A cell is a picture core when its colour is solid (fills thicker than text strokes), doesn't fill the whole cell (not a background or banner), and is shaded or irregular (not a flat chart bar). Colourful cells up to two cells away join it.
+- Regression cases checked: emoji at 48/72 px (now 0 flags, was 18); the sample slide, coloured 36 px text, small text on a pale or gradient background, and white text in a coloured pill all flag exactly as before.
