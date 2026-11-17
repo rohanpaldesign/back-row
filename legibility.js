@@ -82,6 +82,15 @@ function countRegions(grid, cols, rows, type) {
  * that total for large shapes but loses it where strokes are too fine to resolve,
  * which is exactly what makes text unreadable.
  */
+// The slide as the audience takes it in: their eye's blur on top of the washout
+// or compression, at w px wide. Used for the "What they see" close-up.
+export function perceivedImage(src, sim, w) {
+  const width = Math.round(Math.min(w, src.width));
+  const h = Math.max(1, Math.round((width * src.height) / src.width));
+  const eyeWidth = Math.max(8, sim.theta / RAD_PER_ARCMIN / sim.eye);
+  return perceive(sim.degraded, eyeWidth, width, h);
+}
+
 export function analyze(src, sim) {
   const w = Math.min(WORK_WIDTH, src.width);
   const h = Math.max(1, Math.round((w * src.height) / src.width));
