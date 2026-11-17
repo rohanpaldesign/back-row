@@ -576,7 +576,7 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
         // People settle so you can see: the row just ahead leaves a gap for your
         // line of sight, and the head two rows ahead sits in it, just over the
         // bottom of the screen from the back of the room.
-        const dx = x + lean - (Xv - (Xv * kRow) / D);
+        const dx = x + lean - (Xv - (Xv * z) / D);
         if (kRow === 1 && Math.abs(dx) < 0.22) lean += Math.sign(dx || 1) * (0.22 - Math.abs(dx));
         const inLine = kRow === 2 && Math.abs(dx) < 0.3;
         if (inLine) lean -= dx * 0.9;

@@ -5,12 +5,12 @@ const width169 = (diagonalInches) => (diagonalInches * INCH * 16) / Math.hypot(1
 
 // `center`: height of the screen's centre above the stage floor (the front of the room).
 export const SCREENS = [
-  { id: 'tv55', label: '55"', sub: 'TV', kind: 'tv', width: width169(55), center: 2.02 },
-  { id: 'tv85', label: '85"', sub: 'TV', kind: 'tv', width: width169(85), center: 2.21 },
-  { id: 'proj100', label: '100"', sub: 'Projector', kind: 'projector', width: width169(100), center: 2.3 },
-  { id: 'proj150', label: '150"', sub: 'Projector', kind: 'projector', width: width169(150), center: 2.62 },
-  { id: 'proj200', label: '200"', sub: 'Projector', kind: 'projector', width: width169(200), center: 2.93 },
-  { id: 'proj300', label: '300"', sub: 'Theater', kind: 'projector', width: width169(300), center: 3.55 },
+  { id: 'tv55', label: '55"', sub: 'TV', kind: 'tv', width: width169(55), center: 2.29 },
+  { id: 'tv85', label: '85"', sub: 'TV', kind: 'tv', width: width169(85), center: 2.38 },
+  { id: 'proj100', label: '100"', sub: 'Projector', kind: 'projector', width: width169(100), center: 2.47 },
+  { id: 'proj150', label: '150"', sub: 'Projector', kind: 'projector', width: width169(150), center: 2.63 },
+  { id: 'proj200', label: '200"', sub: 'Projector', kind: 'projector', width: width169(200), center: 2.75 },
+  { id: 'proj300', label: '300"', sub: 'Theater', kind: 'projector', width: width169(300), center: 2.97 },
 ];
 
 // The room: a theater of 30 rows, 28 seats a row in three blocks (7 | 14 | 7)
@@ -19,10 +19,10 @@ export const ROWS = 30;
 export const SEATS_PER_ROW = 28;
 export const BLOCKS = [7, 14, 7];
 export const AISLE = 1.0; // extra width of each aisle
-export const FIRST_ROW = 4; // metres from the screen to the front row
-export const ROW_GAP = 1;
+export const FIRST_ROW = 3; // metres from the screen to the front row
+export const ROW_GAP = 0.9;
 export const SEAT_GAP = 0.55;
-export const RAKE = 0.14; // each row sits this much higher: from the back, heads just cover the bottom of the screen
+export const RAKE = 0.12; // each row sits this much higher: from the back, heads just cover the bottom of the screen
 export const EYE_HEIGHT = 1.2; // seated eye height
 
 // The room is nearly full. Occupancy is fixed per seat, so the seat map and the
