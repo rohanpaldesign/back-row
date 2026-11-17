@@ -42,7 +42,7 @@ const state = {
   slides: [],
   idx: 0,
   mode: store.get('mode', 'room'),
-  screen: store.get('screen', 'proj300'),
+  screen: store.get('screen', 'proj240'),
   seatRow: Number(store.get('seatRow', 5)),
   seatCol: Number(store.get('seatCol', 13)),
   light: store.get('light', 'bright'),
@@ -60,17 +60,17 @@ const state = {
   src: null,
 };
 if (state.mode !== 'room' && state.mode !== 'call') state.mode = 'room';
-if (!byId(SCREENS, state.screen)) state.screen = 'proj100';
+if (!byId(SCREENS, state.screen)) state.screen = 'proj240';
 if (!LIGHTS[state.light]) state.light = 'bright';
 if (!byId(APPS, state.app)) state.app = 'zoom';
 if (!byId(DEVICES, state.device)) state.device = 'laptop';
 if (!byId(LAYOUTS, state.layout)) state.layout = 'speaker';
 if (!byId(RECEIVED, state.recv)) state.recv = '720';
 if (!byId(SCALES, state.scale)) state.scale = 'auto';
-// v7: the theater's default screen is 300", three times the old 100" default.
-if (store.get('defaults', 0) < 7) {
-  if (state.screen === 'proj100') state.screen = 'proj300';
-  store.set('defaults', 7);
+// v8: the theater's default screen is 240" (earlier defaults were 100" and 300").
+if (store.get('defaults', 0) < 8) {
+  if (state.screen === 'proj100' || state.screen === 'proj300') state.screen = 'proj240';
+  store.set('defaults', 8);
 }
 if (!['result', 'where', 'setup', 'slides'].includes(state.tab)) state.tab = 'where';
 if (!(Number.isInteger(state.seatRow) && state.seatRow >= 0 && state.seatRow < ROWS)) state.seatRow = 5;
@@ -368,7 +368,7 @@ function syncUI() {
   document.getElementById('tab-where').dataset.tip = room ? 'Pick your seat in the theater' : 'What the audience watches on, and which call app';
   document.getElementById('tab-setup').dataset.tip = room ? 'Screen size and room light' : 'Connection quality and screenshot scale';
   el.viewSceneBtn.textContent = room ? 'Room' : 'Call';
-  el.viewSceneBtn.dataset.tip = room ? 'The view from your seat, life size' : 'The call window on their device';
+  el.viewSceneBtn.dataset.tip = room ? 'The view from your seat' : 'The call window on their device';
   el.slidesTabLbl.textContent = state.slides.length ? `Slides ${state.slides.length}` : 'Slides';
   el.overlayBtn.setAttribute('aria-pressed', String(state.overlay));
   el.fitBtn.setAttribute('aria-pressed', String(fitOn()));
@@ -376,8 +376,8 @@ function syncUI() {
     ? 'Hide the highlights. Red marks text too small to read, amber marks text too faint.'
     : 'Highlight problem areas: red is too small to read, amber is too faint.';
   el.fitBtn.dataset.tip = state.mode === 'call'
-    ? (state.fitCall ? 'Show the device at life size, as big as it really looks' : 'Fit the whole device in the card')
-    : (state.fitRoom ? 'Back to life size: the screen at the size it really looks from this seat' : 'Natural view: about what your eyes take in from this seat (smaller than life)');
+    ? (state.fitCall ? 'Show actual size: the device as big as it really is in front of them' : 'Shrink the device to fit')
+    : (state.fitRoom ? 'Show actual size: the screen exactly as big as it looks from this seat' : 'Back to the normal view of the room');
   const cur = state.slides[state.idx];
   el.crumb.textContent = cur ? [cur.deck, crumbText()].filter(Boolean).join(' · ') : '';
   el.calibStatus.textContent = state.pxPerMm ? 'Screen calibrated' : 'Sizes assume a typical laptop';
@@ -892,13 +892,17 @@ function drawScene() {
   el.panHint.hidden = !scrollable;
   el.viewport.classList.toggle('static', !scrollable);
   el.lifePill.hidden = state.view !== 'scene';
+  const exact = state.pxPerMm ? '' : ' Calibrate under Slides to make it exact on this screen.';
   if (r.scaled) {
-    el.lifePill.textContent = `Fitted, ${Math.round(100 / r.lifeRatio)}% of life size`;
-    el.lifePill.classList.remove('warn');
+    el.lifePill.textContent = state.mode === 'room' ? 'Normal view' : 'Shrunk to fit';
+    el.lifePill.dataset.tip = state.mode === 'room'
+      ? 'Roughly what you take in from this seat. Use the expand button for actual size.'
+      : 'Shrunk so the whole device fits. Use the expand button for actual size.';
   } else {
-    el.lifePill.textContent = state.pxPerMm ? 'Life size at 60 cm' : 'Life size at 60 cm, uncalibrated';
-    el.lifePill.classList.remove('warn');
+    el.lifePill.textContent = 'Actual size';
+    el.lifePill.dataset.tip = `Drawn exactly as big as it looks from there, when you sit about an arm's length from this screen.${exact}`;
   }
+  el.lifePill.classList.remove('warn');
 }
 
 function plural(n, word) {

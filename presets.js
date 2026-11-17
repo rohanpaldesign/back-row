@@ -10,7 +10,7 @@ export const SCREENS = [
   { id: 'proj100', label: '100"', sub: 'Projector', kind: 'projector', width: width169(100), center: 2.47 },
   { id: 'proj150', label: '150"', sub: 'Projector', kind: 'projector', width: width169(150), center: 2.63 },
   { id: 'proj200', label: '200"', sub: 'Projector', kind: 'projector', width: width169(200), center: 2.75 },
-  { id: 'proj300', label: '300"', sub: 'Theater', kind: 'projector', width: width169(300), center: 2.97 },
+  { id: 'proj240', label: '240"', sub: 'Theater', kind: 'projector', width: width169(240), center: 2.84 },
 ];
 
 // The room: a theater of 30 rows, 28 seats a row in three blocks (7 | 14 | 7)
