@@ -25,6 +25,9 @@ const P = {
   laptop: '<rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2 19h20"/>',
   monitor: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/>',
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  gauge: '<path d="M4 16.5a8 8 0 1 1 16 0"/><path d="M12 16.5l3.6-4.6"/><circle cx="12" cy="16.5" r="1.2" fill="currentColor"/>',
+  sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+  stack: '<rect x="3" y="4.5" width="14" height="10" rx="1.5"/><path d="M7 19.5h12.5a1.5 1.5 0 0 0 1.5-1.5V9"/>',
   shield: '<path d="M12 3.5 5 6v5.5c0 4.2 3 7.6 7 9 4-1.4 7-4.8 7-9V6z"/>',
 };
 

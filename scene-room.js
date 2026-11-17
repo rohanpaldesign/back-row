@@ -3,12 +3,12 @@
 // and rows of seats with people in them. Drawn as a pinhole camera whose focal
 // length is the user's own viewing distance in screen pixels, so it is life size.
 
-import { EYE_HEIGHT, ROW_GAP, RAKE, SEATS_PER_ROW, SEAT_GAP, USER_DISTANCE, seatOffset, seatTaken } from './presets.js';
+import { EYE_HEIGHT, ROW_GAP, RAKE, SEATS_PER_ROW, USER_DISTANCE, AISLE_X, seatOffset, seatTaken } from './presets.js';
 import { resample, physical } from './simulate.js';
 import { TOO_SMALL } from './legibility.js';
 
-const ROOM_W = 10; // metres, wall to wall
-const CEIL = 3.3; // ceiling height above the viewer's floor
+const ROOM_W = 22; // metres, wall to wall: a theater
+const CEIL = 6.5; // ceiling height above the viewer's floor
 const NEAR = 0.35; // nearest depth drawn
 const HEAD_TOP = 1.28; // top of a seated head above that row's floor
 const CHAIR_TOP = 0.86; // top of a seat back above the floor
@@ -309,8 +309,8 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
     poly(ctx, pts, g);
   }
   // Ceiling lights (2x2 ft recessed panels).
-  for (let z = D - 1.2; z > 0.9; z -= 2.2) {
-    for (const x of [-3, 0, 3]) {
+  for (let z = D - 1.5; z > 0.9; z -= 3) {
+    for (const x of [-7.5, -2.5, 2.5, 7.5]) {
       const q = [P(x - 0.3, CEIL, z + 0.3), P(x + 0.3, CEIL, z + 0.3), P(x + 0.3, CEIL, z - 0.3), P(x - 0.3, CEIL, z - 0.3)];
       if (look.lampGlow) {
         const [gx, gy] = P(x, CEIL, z);
@@ -489,7 +489,7 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
   }
 
   // Rows, far to near: aisle step lights, the people, then the seat backs in front of them.
-  const span = (SEATS_PER_ROW / 2 + 1) * SEAT_GAP;
+  const aisles = [AISLE_X[0], AISLE_X[1], seatOffset(0, 0) - 0.7, seatOffset(0, SEATS_PER_ROW - 1) + 0.7];
   for (let kRow = rowsAhead; kRow >= 1; kRow--) {
     const z = kRow * ROW_GAP;
     const seatRow = cfg.row - kRow;
@@ -498,7 +498,7 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
     const blur = z < 2.6 ? Math.min(5, s * 0.0016 * (2.6 - z)) : 0;
     if (blur > 0.4) ctx.filter = `blur(${blur.toFixed(1)}px)`;
     if (!look.lampGlow || dark) {
-      for (const ax of [-span - 0.25, span + 0.25]) {
+      for (const ax of aisles) {
         const [px, py] = P(ax, fl + 0.05, z + 0.45);
         ctx.fillStyle = 'rgba(255,196,120,0.75)';
         ctx.beginPath();
@@ -507,7 +507,7 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
       }
     }
     const seats = [];
-    for (let col = -2; col < SEATS_PER_ROW + 2; col++) {
+    for (let col = 0; col < SEATS_PER_ROW; col++) {
       const x = seatOffset(seatRow, col);
       const px = X(x, z);
       if (px < -0.6 * s || px > cssW + 0.6 * s) continue;

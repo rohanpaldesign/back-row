@@ -9,14 +9,19 @@ export const SCREENS = [
   { id: 'tv85', label: '85"', sub: 'TV', kind: 'tv', width: width169(85), center: 1.55 },
   { id: 'proj100', label: '100"', sub: 'Projector', kind: 'projector', width: width169(100), center: 1.85 },
   { id: 'proj150', label: '150"', sub: 'Projector', kind: 'projector', width: width169(150), center: 2.2 },
+  { id: 'proj200', label: '200"', sub: 'Projector', kind: 'projector', width: width169(200), center: 2.8 },
+  { id: 'proj300', label: '300"', sub: 'Theater', kind: 'projector', width: width169(300), center: 3.6 },
 ];
 
-// The room: 12 rows of 7 seats, tiered so heads further forward sit lower.
-export const ROWS = 12;
-export const SEATS_PER_ROW = 7;
+// The room: a theater of 30 rows, 28 seats a row in three blocks (7 | 14 | 7)
+// split by two aisles, tiered so heads further forward sit lower.
+export const ROWS = 30;
+export const SEATS_PER_ROW = 28;
+export const BLOCKS = [7, 14, 7];
+export const AISLE = 1.0; // extra width of each aisle
 export const FIRST_ROW = 2; // metres from the screen to the front row
 export const ROW_GAP = 1;
-export const SEAT_GAP = 0.6;
+export const SEAT_GAP = 0.55;
 export const RAKE = 0.08; // each row sits this much higher than the one in front
 export const EYE_HEIGHT = 1.2; // seated eye height
 
@@ -34,7 +39,11 @@ export const seatTaken = (row, col) => seatHash(row, col) < CROWD_FILL;
 
 export const seatDistance = (row) => FIRST_ROW + row * ROW_GAP;
 // Rows are staggered a quarter seat left and right so heads don't line up.
-export const seatOffset = (row, col) => (col - (SEATS_PER_ROW - 1) / 2) * SEAT_GAP + (row % 2 ? 0.15 : -0.15);
+export const seatBlock = (col) => (col < BLOCKS[0] ? 0 : col < BLOCKS[0] + BLOCKS[1] ? 1 : 2);
+const seatX = (col) => (col - (SEATS_PER_ROW - 1) / 2) * SEAT_GAP + (seatBlock(col) - 1) * AISLE;
+export const seatOffset = (row, col) => seatX(col) + (row % 2 ? 0.12 : -0.12);
+// Centre lines of the two aisles.
+export const AISLE_X = [(seatX(BLOCKS[0] - 1) + seatX(BLOCKS[0])) / 2, (seatX(BLOCKS[0] + BLOCKS[1] - 1) + seatX(BLOCKS[0] + BLOCKS[1])) / 2];
 
 // How the room light washes the picture out: pure black and pure white on the
 // slide land on these levels (0-255). `factor` raises the size a viewer needs

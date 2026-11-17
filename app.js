@@ -1,11 +1,11 @@
 import {
   SCREENS, LIGHTS, RECEIVED, DEVICES, APPS, LAYOUTS, SCALES,
-  ROWS, SEATS_PER_ROW, seatDistance, seatOffset, seatTaken,
+  ROWS, SEATS_PER_ROW, BLOCKS, seatDistance, seatOffset, seatTaken,
   CARD_SHORT_MM, CARD_LONG_MM, DEFAULT_PX_PER_MM,
   UI_TEXT_PX, MAX_SLIDE_WIDTH, MAX_SLIDES,
 } from './presets.js';
 import { simulate, resample, makeCanvas } from './simulate.js';
-import { analyze, minReadable } from './legibility.js';
+import { analyze, minReadable, perceivedImage } from './legibility.js';
 import { drawSample } from './sample.js';
 import { renderRoom } from './scene-room.js';
 import { renderCall } from './scene-call.js';
@@ -44,7 +44,7 @@ const state = {
   mode: store.get('mode', 'room'),
   screen: store.get('screen', 'proj100'),
   seatRow: Number(store.get('seatRow', 7)),
-  seatCol: Number(store.get('seatCol', 3)),
+  seatCol: Number(store.get('seatCol', 13)),
   light: store.get('light', 'bright'),
   app: store.get('app', 'zoom'),
   device: store.get('device', 'laptop'),
@@ -54,7 +54,8 @@ const state = {
   overlay: store.get('overlay', true) !== false,
   fit: store.get('fit', false) === true,
   fitCall: store.get('fitCall', true) !== false,
-  view: 'audience',
+  view: 'scene',
+  tab: store.get('tab', 'where'),
   pxPerMm: store.get('pxPerMm', null),
   src: null,
 };
@@ -66,15 +67,16 @@ if (!byId(DEVICES, state.device)) state.device = 'laptop';
 if (!byId(LAYOUTS, state.layout)) state.layout = 'speaker';
 if (!byId(RECEIVED, state.recv)) state.recv = '720';
 if (!byId(SCALES, state.scale)) state.scale = 'auto';
+if (!['result', 'where', 'setup', 'slides'].includes(state.tab)) state.tab = 'where';
 if (!(Number.isInteger(state.seatRow) && state.seatRow >= 0 && state.seatRow < ROWS)) state.seatRow = 7;
-if (!(Number.isInteger(state.seatCol) && state.seatCol >= 0 && state.seatCol < SEATS_PER_ROW)) state.seatCol = 3;
+if (!(Number.isInteger(state.seatCol) && state.seatCol >= 0 && state.seatCol < SEATS_PER_ROW)) state.seatCol = 13;
 if (!(typeof state.pxPerMm === 'number' && state.pxPerMm > 1 && state.pxPerMm < 20)) state.pxPerMm = null;
 
 const el = Object.fromEntries([
   'empty', 'work', 'fileInput', 'fileInput2', 'sampleBtn', 'navSample', 'navAdd', 'themeBtn', 'clearBtn',
   'crumb', 'slideName', 'context',
   'viewSeg', 'lifePill', 'viewport', 'scene', 'roomCv', 'callHost', 'panHint', 'overlayBtn', 'fitBtn', 'busy',
-  'resultCard', 'resultBody', 'modeTabs',
+  'resultBody', 'modeTabs', 'resultTabLbl', 'slidesTabLbl', 'viewSceneBtn',
   'seatDist', 'seatRows', 'seatRowsEl', 'scenePrev', 'sceneNext', 'sceneCount', 'sceneNav',
   'linkForm', 'linkInput', 'linkForm2', 'linkInput2', 'copyLinkBtn', 'screenTiles', 'lightTiles',
   'appTiles', 'layoutHead', 'layoutSeg', 'deviceTiles', 'recvTiles', 'scaleSeg',
@@ -93,48 +95,33 @@ el.sceneNext.innerHTML = icon('right', 20);
 el.overlayBtn.innerHTML = icon('eye', 19);
 el.fitBtn.innerHTML = icon('expand', 18);
 
-/* ---------- Collapsible cards ---------- */
+/* ---------- Side panel tabs ---------- */
 
-// Every settings card (and the results card) folds down to its header, which then
-// shows a one-line summary. Which cards are folded is remembered per viewer.
-const folded = new Set(store.get('collapsed', []));
-const summaries = new Map();
-for (const card of document.querySelectorAll('#work .card.ctl')) {
-  const head = card.querySelector(':scope > .ctl-head');
-  const label = head.querySelector('.label');
-  const title = label.textContent.replace('ⓘ', '').trim();
-  const key = card.dataset.key || title;
-  const body = document.createElement('div');
-  body.className = 'ctl-body';
-  body.id = `cb-${key.toLowerCase().replace(/\W+/g, '-')}`;
-  while (head.nextSibling) body.appendChild(head.nextSibling);
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'ctl-head toggle';
-  btn.setAttribute('aria-controls', body.id);
-  if (label.dataset.tip) btn.dataset.tip = label.dataset.tip;
-  btn.innerHTML = `<span class="label">${title}</span><span class="summary"></span><span class="chev" aria-hidden="true">${icon('right', 16)}</span>`;
-  head.replaceWith(btn);
-  card.appendChild(body);
-  const setFolded = (on) => {
-    card.classList.toggle('collapsed', on);
-    btn.setAttribute('aria-expanded', String(!on));
-    body.hidden = on;
-  };
-  setFolded(folded.has(key));
-  btn.addEventListener('click', () => {
-    const on = !card.classList.contains('collapsed');
-    setFolded(on);
-    if (on) folded.add(key);
-    else folded.delete(key);
-    store.set('collapsed', [...folded]);
-  });
-  summaries.set(key, btn.querySelector('.summary'));
+const tabBtns = [...document.querySelectorAll('.sidetabs [data-tab]')];
+const panels = [...document.querySelectorAll('.side .panel')];
+for (const ti of document.querySelectorAll('.sidetabs .ti')) ti.innerHTML = icon(ti.dataset.icon, 20);
+tabBtns.forEach((b) => b.addEventListener('click', () => {
+  state.tab = b.dataset.tab;
+  store.set('tab', state.tab);
+  syncTabs();
+}));
+document.querySelector('.sidetabs').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  e.stopPropagation();
+  const i = tabBtns.findIndex((b) => b.dataset.tab === state.tab);
+  const next = tabBtns[(i + (e.key === 'ArrowRight' ? 1 : tabBtns.length - 1)) % tabBtns.length];
+  next.click();
+  next.focus();
+});
+function syncTabs() {
+  for (const b of tabBtns) {
+    const on = b.dataset.tab === state.tab;
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+  }
+  for (const pn of panels) pn.hidden = pn.dataset.panel !== state.tab;
 }
-function setSummary(key, text) {
-  const s = summaries.get(key);
-  if (s) s.textContent = text;
-}
+syncTabs();
 
 /* ---------- Config ---------- */
 
@@ -163,7 +150,7 @@ function cfg() {
 }
 
 function persist() {
-  for (const k of ['mode', 'screen', 'seatRow', 'seatCol', 'light', 'app', 'device', 'layout', 'recv', 'scale', 'overlay', 'fit', 'fitCall']) {
+  for (const k of ['mode', 'screen', 'seatRow', 'seatCol', 'light', 'app', 'device', 'layout', 'recv', 'scale', 'overlay', 'fit', 'fitCall', 'tab']) {
     store.set(k, state[k]);
   }
 }
@@ -222,22 +209,30 @@ function buildSeatMap() {
   for (let r = 0; r < ROWS; r++) {
     const row = document.createElement('div');
     row.className = `seat-row ${r % 2 ? 'odd' : 'even'}`;
-    for (let c = 0; c < SEATS_PER_ROW; c++) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'seat';
-      b.dataset.r = String(r);
-      b.dataset.c = String(c);
-      b.setAttribute('aria-label', `Row ${r + 1}, seat ${c + 1}, ${seatDistance(r)} metres from the screen`);
-      b.dataset.tip = `Row ${r + 1}, ${seatDistance(r)} m from the screen`;
-      b.addEventListener('click', () => {
-        const rowChanged = state.seatRow !== r;
-        state.seatRow = r;
-        state.seatCol = c;
-        changed({ recompute: rowChanged });
-      });
-      row.appendChild(b);
-    }
+    let col = 0;
+    BLOCKS.forEach((count, bi) => {
+      const block = document.createElement('div');
+      block.className = 'seat-block';
+      for (let i = 0; i < count; i++, col++) {
+        const c = col;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'seat';
+        b.dataset.r = String(r);
+        b.dataset.c = String(c);
+        b.setAttribute('aria-label', `Row ${r + 1}, seat ${c + 1}, ${seatDistance(r)} metres from the screen`);
+        b.dataset.tip = `Row ${r + 1}, seat ${c + 1}: ${seatDistance(r)} m from the screen`;
+        b.addEventListener('click', () => {
+          const rowChanged = state.seatRow !== r;
+          state.seatRow = r;
+          state.seatCol = c;
+          changed({ recompute: rowChanged });
+        });
+        block.appendChild(b);
+      }
+      row.appendChild(block);
+      if (bi < BLOCKS.length - 1) row.appendChild(Object.assign(document.createElement('span'), { className: 'aisle' }));
+    });
     el.seatRowsEl.appendChild(row);
   }
 }
@@ -303,6 +298,7 @@ function syncUI() {
   el.work.classList.toggle('mode-room', state.mode === 'room');
   el.work.classList.toggle('mode-call', state.mode === 'call');
   for (const b of el.viewSeg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.view === state.view));
+  el.fitBtn.hidden = state.view !== 'scene';
   syncPressed(el.screenTiles, state.screen);
   syncPressed(el.lightTiles, state.light);
   syncPressed(el.appTiles, state.app);
@@ -314,16 +310,12 @@ function syncUI() {
   el.layoutHead.hidden = phone;
   el.layoutSeg.hidden = phone;
   syncSeatMap();
-  {
-    const scr = byId(SCREENS, state.screen);
-    const dev = byId(DEVICES, state.device);
-    setSummary('Where you sit', `Row ${state.seatRow + 1}, ${seatDistance(state.seatRow)} m`);
-    setSummary('Screen', `${scr.label} ${scr.sub}`);
-    setSummary('Room light', LIGHTS[state.light].label);
-    setSummary('Watching on', `${dev.label}, ${byId(APPS, state.app).label}`);
-    setSummary('They receive', byId(RECEIVED, state.recv).label);
-    setSummary('Screenshot scale', byId(SCALES, state.scale).label);
-  }
+  const room = state.mode === 'room';
+  document.getElementById('tab-where').dataset.tip = room ? 'Pick your seat in the theater' : 'What the audience watches on, and which call app';
+  document.getElementById('tab-setup').dataset.tip = room ? 'Screen size and room light' : 'Connection quality and screenshot scale';
+  el.viewSceneBtn.textContent = room ? 'Room' : 'Call';
+  el.viewSceneBtn.dataset.tip = room ? 'The view from your seat, life size' : 'The call window on their device';
+  el.slidesTabLbl.textContent = state.slides.length ? `Slides ${state.slides.length}` : 'Slides';
   el.overlayBtn.setAttribute('aria-pressed', String(state.overlay));
   el.fitBtn.setAttribute('aria-pressed', String(fitOn()));
   el.overlayBtn.dataset.tip = state.overlay
@@ -332,7 +324,8 @@ function syncUI() {
   el.fitBtn.dataset.tip = state.mode === 'call'
     ? (state.fitCall ? 'Show the device at life size, as big as it really looks' : 'Fit the whole device in the card')
     : (state.fit ? 'Back to life size: the screen at the size it really looks from this seat' : 'Step back to see the whole front of the room (smaller than life)');
-  el.crumb.textContent = state.slides.length ? crumbText() : '';
+  const cur = state.slides[state.idx];
+  el.crumb.textContent = cur ? [cur.deck, crumbText()].filter(Boolean).join(' · ') : '';
   el.calibStatus.textContent = state.pxPerMm ? 'Screen calibrated' : 'Sizes assume a typical laptop';
   el.calibBtn.textContent = state.pxPerMm ? 'Recalibrate' : 'Calibrate';
   const n = state.slides.length;
@@ -427,10 +420,10 @@ function toSlideCanvas(source) {
   return out;
 }
 
-function addSlide(name, canvas) {
+function addSlide(name, canvas, deck = '') {
   if (state.slides.length >= MAX_SLIDES) return false;
   const thumb = resample(canvas, 336, (336 * canvas.height) / canvas.width);
-  state.slides.push({ name, canvas, thumb, verdict: null, el: null, badge: null });
+  state.slides.push({ name, deck, canvas, thumb, verdict: null, el: null, badge: null });
   return true;
 }
 
@@ -457,7 +450,15 @@ function loadPdfJs() {
 async function addPdf(file, name = file.name) {
   const lib = await loadPdfJs();
   const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const base = (name || 'Slides').replace(/\.pdf$/i, '');
+  let deck = (name || '').replace(/\.pdf$/i, '');
+  try {
+    const meta = await doc.getMetadata();
+    const t = (meta?.info?.Title || '').trim();
+    if (t && !/^untitled/i.test(t) && (!deck || deck === 'Google Slides')) deck = t;
+  } catch {
+    /* no metadata: keep the file name */
+  }
+  if (!deck) deck = 'Slides';
   for (let p = 1; p <= doc.numPages; p++) {
     setLoading(`Reading page ${p} of ${doc.numPages}`);
     if (state.slides.length >= MAX_SLIDES) break;
@@ -469,11 +470,42 @@ async function addPdf(file, name = file.name) {
     x.fillStyle = '#ffffff';
     x.fillRect(0, 0, c.width, c.height);
     await page.render({ canvasContext: x, viewport: vp }).promise;
-    addSlide(`${base}, page ${p}`, c);
+    addSlide((await pageTitle(page)) || `Slide ${p}`, c, deck);
     page.cleanup();
   }
   doc.destroy();
 }
+
+// A slide's title: the largest text in the top part of the page.
+async function pageTitle(page) {
+  try {
+    const vp = page.getViewport({ scale: 1 });
+    const { items } = await page.getTextContent();
+    let best = null;
+    for (const it of items) {
+      const str = (it.str || '').trim();
+      if (str.length < 2) continue;
+      const size = Math.hypot(it.transform[2], it.transform[3]);
+      const y = vp.height - it.transform[5];
+      if (y > vp.height * 0.6) continue;
+      if (!best || size > best.size + 0.5 || (Math.abs(size - best.size) <= 0.5 && y < best.y)) best = { size, y, str };
+    }
+    if (!best) return '';
+    // Join the other pieces on the same line at the same size.
+    const line = items
+      .filter((it) => Math.abs(Math.hypot(it.transform[2], it.transform[3]) - best.size) < 0.6 && Math.abs(vp.height - it.transform[5] - best.y) < best.size * 0.6)
+      .sort((p1, p2) => p1.transform[4] - p2.transform[4])
+      .map((it) => it.str)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return (line || best.str).slice(0, 90);
+  } catch {
+    return '';
+  }
+}
+
+const stripExt = (n) => (n || '').replace(/\.[a-z0-9]{2,5}$/i, '');
 
 const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
 
@@ -493,7 +525,7 @@ async function addFiles(fileList) {
     }
     try {
       if (isPdf(f)) await addPdf(f);
-      else addSlide(f.name || 'Pasted image', toSlideCanvas(await loadBitmap(f)));
+      else addSlide(stripExt(f.name) || 'Pasted image', toSlideCanvas(await loadBitmap(f)));
     } catch (err) {
       console.warn(err);
       toast(`Couldn't read ${f.name || 'that file'}.`);
@@ -508,7 +540,7 @@ async function addFiles(fileList) {
 }
 
 function addSample() {
-  addSlide('Sample slide', drawSample());
+  addSlide('Q3 roadmap review', drawSample(), 'Example deck');
   state.idx = state.slides.length - 1;
   showWork();
 }
@@ -712,6 +744,47 @@ function overlayColors() {
   };
 }
 
+// The slide alone, enlarged to fill the card: what the audience takes in, or the
+// original, so the two can be compared side by side in time.
+function renderCloseUp(canvas, image, a, viewW, viewH) {
+  const pad = 24;
+  const top = 64;
+  const k = Math.min((viewW - pad * 2) / image.width, (viewH - top - 72) / image.height);
+  const w = image.width * k;
+  const h = image.height * k;
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(viewW * dpr);
+  canvas.height = Math.round(viewH * dpr);
+  canvas.style.width = `${viewW}px`;
+  canvas.style.height = `${viewH}px`;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#1a1a1c';
+  ctx.fillRect(0, 0, viewW, viewH);
+  const x0 = (viewW - w) / 2;
+  const y0 = top + (viewH - top - 72 - h) / 2;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(image, x0, y0, w, h);
+  if (state.overlay && a) {
+    const colors = overlayColors();
+    const kx = w / a.w;
+    const ky = h / a.h;
+    ctx.globalAlpha = 0.4;
+    for (let cy = 0; cy < a.rows; cy++) {
+      for (let cx = 0; cx < a.cols; cx++) {
+        const t = a.grid[cy * a.cols + cx];
+        if (!t) continue;
+        ctx.fillStyle = t === 1 ? colors.small : colors.faint;
+        const px = x0 + cx * a.cell * kx;
+        const py = y0 + cy * a.cell * ky;
+        ctx.fillRect(px, py, x0 + Math.min(a.w, (cx + 1) * a.cell) * kx - px, y0 + Math.min(a.h, (cy + 1) * a.cell) * ky - py);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  return { cssW: viewW, cssH: viewH, focusX: viewW / 2, focusY: viewH / 2, scaled: false, lifeRatio: 1 };
+}
+
 function drawScene() {
   if (!currentRes) return;
   const { slide, sim, a } = currentRes;
@@ -721,7 +794,7 @@ function drawScene() {
   if (!viewW || !viewH) return;
   const opts = {
     slide: slide.canvas,
-    image: state.view === 'original' ? slide.canvas : sim.degraded,
+    image: sim.degraded,
     analysis: a,
     overlay: state.overlay,
     cfg: c,
@@ -732,7 +805,13 @@ function drawScene() {
     colors: overlayColors(),
   };
   let r;
-  if (c.mode === 'room') {
+  if (state.view !== 'scene') {
+    el.callHost.hidden = true;
+    el.callHost.innerHTML = '';
+    el.roomCv.hidden = false;
+    if (state.view === 'see' && !currentRes.seen) currentRes.seen = perceivedImage(slide.canvas, sim, 1600);
+    r = renderCloseUp(el.roomCv, state.view === 'see' ? currentRes.seen : slide.canvas, a, viewW, viewH);
+  } else if (c.mode === 'room') {
     el.callHost.hidden = true;
     el.callHost.innerHTML = '';
     el.roomCv.hidden = false;
@@ -748,7 +827,7 @@ function drawScene() {
   el.scene.style.height = `${r.cssH}px`;
 
   // Re-centre on the screen when the scene itself changes, not on every repaint.
-  const sceneKey = `${c.key}|${c.mode === 'room' ? state.seatCol : ''}|${fitOn()}|${viewW}|${viewH}|${state.pxPerMm}`;
+  const sceneKey = `${state.view}|${c.key}|${c.mode === 'room' ? state.seatCol : ''}|${fitOn()}|${viewW}|${viewH}|${state.pxPerMm}`;
   if (sceneKey !== lastSceneKey) {
     el.viewport.scrollLeft = Math.max(0, r.focusX - viewW / 2);
     el.viewport.scrollTop = Math.max(0, r.focusY - viewH / 2);
@@ -757,6 +836,7 @@ function drawScene() {
   const scrollable = r.cssW > viewW + 1 || r.cssH > viewH + 1;
   el.panHint.hidden = !scrollable;
   el.viewport.classList.toggle('static', !scrollable);
+  el.lifePill.hidden = state.view !== 'scene';
   if (r.scaled) {
     el.lifePill.textContent = `Fitted, ${Math.round(100 / r.lifeRatio)}% of life size`;
     el.lifePill.classList.remove('warn');
@@ -802,7 +882,8 @@ function renderVerdict() {
   const status = n === 0
     ? '<span class="status ok"><i></i>Reads fine</span>'
     : `<span class="status bad"><i></i>${plural(n, 'problem')}</span>`;
-  setSummary('result', `${v}px, ${n ? plural(n, 'problem') : 'reads fine'}`);
+  el.resultTabLbl.textContent = `${v}px`;
+  document.getElementById('tab-result').dataset.tip = `Smallest readable text: ${v}px. ${n ? plural(n, 'problem area') : 'Everything reads'} from here.`;
   el.resultBody.innerHTML = `
     <div class="res-main" data-tip="Text smaller than this can't be read from here. Measured on the slide's own pixels."><span class="midnum">${v}<small>px</small></span><span class="muted">${sub}</span>${status}</div>
     <ul class="metrics">
@@ -914,7 +995,18 @@ async function fetchFirst(urls) {
       const r = await fetch(u, { credentials: 'omit' });
       if (!r.ok) continue;
       const b = await r.blob();
-      if (!b.type.includes('html')) return b;
+      if (b.type.includes('html')) continue;
+      // The deck's name, when the host shares it (Content-Disposition filename).
+      const cd = r.headers.get('content-disposition') || '';
+      const m = cd.match(/filename\*=UTF-8''([^;]+)/i) || cd.match(/filename="?([^";]+)"?/i);
+      if (m) {
+        try {
+          b.fileName = decodeURIComponent(m[1]);
+        } catch {
+          b.fileName = m[1];
+        }
+      }
+      return b;
     } catch {
       /* blocked or offline: try the next form of the link */
     }
@@ -942,11 +1034,11 @@ async function addLink(raw, slideIndex = 0) {
       : 'That site doesn’t let other pages load its files. Download it and drop it here instead.');
     return;
   }
-  const name = google ? 'Google Slides' : decodeURIComponent(new URL(url).pathname.split('/').pop() || 'Linked file');
+  const name = blob.fileName || (google ? 'Google Slides' : decodeURIComponent(new URL(url).pathname.split('/').pop() || 'Linked file'));
   const firstNew = state.slides.length;
   try {
     if (blob.type === 'application/pdf' || /\.pdf$/i.test(name)) await addPdf(blob, name);
-    else if (blob.type.startsWith('image/')) addSlide(name, toSlideCanvas(await loadBitmap(blob)));
+    else if (blob.type.startsWith('image/')) addSlide(stripExt(name), toSlideCanvas(await loadBitmap(blob)));
     else throw new Error('unsupported ' + blob.type);
   } catch (err) {
     console.warn(err);

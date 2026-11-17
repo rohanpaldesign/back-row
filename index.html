@@ -84,12 +84,13 @@
         <h1 class="slidename" id="slideName"></h1>
         <span class="crumb" id="crumb"></span>
       </div>
-      <section id="work" class="bento work" hidden>
+      <section id="work" class="work" hidden>
         <article class="card scene-card" id="sceneCard">
           <div class="scene-top">
             <div class="seg" id="viewSeg">
-              <button type="button" data-view="audience" data-tip="What your audience sees from here: blurred by distance, washed out by light or video compression">Audience</button>
-              <button type="button" data-view="original" data-tip="Your slide exactly as you made it, in the same spot, to compare">Original</button>
+              <button type="button" data-view="scene" id="viewSceneBtn" data-tip="The view from your seat, life size">Room</button>
+              <button type="button" data-view="see" data-tip="What your audience actually takes in, enlarged so you can inspect it: blurred by distance, washed out by the light or by video compression">What they see</button>
+              <button type="button" data-view="original" data-tip="Your slide as you made it, enlarged the same way, to compare with what they see">Your slide</button>
             </div>
             <span class="pill mono" id="lifePill" tabindex="0" data-tip="Drawn at the size it really looks, for you sitting about 60 cm from this screen. Calibrate under Slides for a precise match.">Life size</span>
           </div>
@@ -109,59 +110,78 @@
           <div class="busy mono" id="busy" hidden>Working…</div>
         </article>
 
-
-        <!-- Room controls -->
-        <div class="side">
-        <article class="card result-card ctl" id="resultCard" data-key="result"><div class="ctl-head"><span class="label">Smallest readable text</span></div><div class="result-body" id="resultBody" aria-live="polite"></div></article>
-        <article class="card ctl primary room-only" id="seatCard">
-          <div class="ctl-head"><span class="label">Where you sit</span></div>
-          <div class="seat-read"><span class="midnum" id="seatDist">9 m</span><span class="muted" id="seatRows"></span></div>
-          <div class="seatmap" id="seatMap"><div class="seatmap-screen">Screen</div><div id="seatRowsEl"></div></div>
-          <div class="seatkey muted small"><span><i class="k you"></i>You</span><span><i class="k taken"></i>Someone sitting</span><span><i class="k"></i>Empty</span></div>
-        </article>
-        <article class="card ctl primary call-only">
-          <div class="ctl-head"><span class="label">Watching on</span></div>
-          <div class="tiles three" id="deviceTiles"></div>
-          <div class="ctl-head sub"><span class="label">App</span></div>
-          <div class="tiles two" id="appTiles"></div>
-          <div class="ctl-head sub" id="layoutHead"><span class="label" data-tip="Speaker: participants in a strip. Side-by-side: participants in a panel next to the shared screen, which makes it smaller." tabindex="0">View ⓘ</span></div>
-          <div class="seg wide" id="layoutSeg"></div>
-        </article>
-        </div>
-        <article class="card ctl half room-only">
-          <div class="ctl-head"><span class="label">Screen</span></div>
-          <div class="tiles four" id="screenTiles"></div>
-        </article>
-        <article class="card ctl half room-only">
-          <div class="ctl-head"><span class="label">Room light</span></div>
-          <div class="tiles three" id="lightTiles"></div>
-        </article>
-
-        <!-- Call controls -->
-        <article class="card ctl half call-only">
-          <div class="ctl-head"><span class="label" data-tip="The resolution your share arrives at. Calls drop resolution and compress harder on weak connections." tabindex="0">They receive ⓘ</span></div>
-          <div class="tiles three" id="recvTiles"></div>
-        </article>
-        <article class="card ctl half call-only">
-          <div class="ctl-head"><span class="label" data-tip="Screenshots from Retina and other high-DPI screens are 2x: everything is twice as many pixels. Auto guesses from the width." tabindex="0">Screenshot scale ⓘ</span></div>
-          <div class="seg wide" id="scaleSeg"></div>
-        </article>
-
-        <article class="card slides-card">
-          <div class="ctl-head">
-            <span class="label">Slides</span>
-            <span class="spacer"></span>
-            <span class="muted small" id="calibStatus"></span>
-            <button class="link" id="calibBtn" type="button" data-tip="Match a credit card on screen so life size is exact on this display">Calibrate</button>
-            <button class="btn small ghost" id="copyLinkBtn" type="button" hidden data-tip="Copy a Back Row link that opens this deck at this slide">Copy link</button>
-            <button class="btn small ghost" id="clearBtn" type="button" data-tip="Remove all slides">Start over</button>
+        <aside class="card side" id="side" aria-label="Settings and results">
+          <div class="sidetabs" role="tablist" aria-label="Panels">
+            <button type="button" role="tab" data-tab="result" id="tab-result" aria-controls="panel-result" data-tip="The smallest text that still reads, and the problem areas">
+              <span class="ti" data-icon="gauge"></span><span class="tl" id="resultTabLbl">Result</span>
+            </button>
+            <button type="button" role="tab" data-tab="where" id="tab-where" aria-controls="panel-where">
+              <span class="ti room-only" data-icon="people"></span><span class="ti call-only" data-icon="laptop"></span>
+              <span class="tl room-only">Seat</span><span class="tl call-only">Device</span>
+            </button>
+            <button type="button" role="tab" data-tab="setup" id="tab-setup" aria-controls="panel-setup">
+              <span class="ti" data-icon="sliders"></span>
+              <span class="tl room-only">Room setup</span><span class="tl call-only">Call setup</span>
+            </button>
+            <button type="button" role="tab" data-tab="slides" id="tab-slides" aria-controls="panel-slides" data-tip="Your slides, adding more, and calibration">
+              <span class="ti" data-icon="stack"></span><span class="tl" id="slidesTabLbl">Slides</span>
+            </button>
           </div>
-          <form class="linkform compact" id="linkForm2">
-            <input id="linkInput2" type="url" inputmode="url" placeholder="Add from a Google Slides, PDF or image link" aria-label="Link to more slides">
-            <button class="btn small primary" type="submit">Add</button>
-          </form>
-          <div class="thumbs" id="thumbs"></div>
-        </article>
+
+          <section class="panel" id="panel-result" data-panel="result" role="tabpanel" aria-labelledby="tab-result">
+            <div id="resultBody" aria-live="polite"></div>
+          </section>
+
+          <section class="panel" id="panel-where" data-panel="where" role="tabpanel" aria-labelledby="tab-where">
+            <div class="room-only group">
+              <span class="label">Where you sit</span>
+              <div class="seat-read"><span class="midnum" id="seatDist">9 m</span><span class="muted" id="seatRows"></span></div>
+              <div class="seatmap" id="seatMap">
+                <div class="stage"><span>Screen</span></div>
+                <div id="seatRowsEl"></div>
+              </div>
+              <div class="seatkey muted small"><span><i class="k you"></i>You</span><span><i class="k taken"></i>Someone sitting</span><span><i class="k"></i>Empty</span></div>
+            </div>
+            <div class="call-only group">
+              <span class="label">Watching on</span>
+              <div class="tiles three" id="deviceTiles"></div>
+              <span class="label">App</span>
+              <div class="tiles two" id="appTiles"></div>
+              <span class="label" id="layoutHead" tabindex="0" data-tip="Speaker: participants in a strip. Side-by-side: participants in a panel next to the shared screen, which makes it smaller.">View ⓘ</span>
+              <div class="seg wide" id="layoutSeg"></div>
+            </div>
+          </section>
+
+          <section class="panel" id="panel-setup" data-panel="setup" role="tabpanel" aria-labelledby="tab-setup">
+            <div class="room-only group">
+              <span class="label">Screen</span>
+              <div class="tiles three" id="screenTiles"></div>
+              <span class="label">Room light</span>
+              <div class="tiles three" id="lightTiles"></div>
+            </div>
+            <div class="call-only group">
+              <span class="label" tabindex="0" data-tip="The resolution your share arrives at. Calls drop resolution and compress harder on weak connections.">They receive ⓘ</span>
+              <div class="tiles three" id="recvTiles"></div>
+              <span class="label" tabindex="0" data-tip="Screenshots from Retina and other high-DPI screens are 2x: everything is twice as many pixels. Auto guesses from the width.">Screenshot scale ⓘ</span>
+              <div class="seg wide" id="scaleSeg"></div>
+            </div>
+          </section>
+
+          <section class="panel" id="panel-slides" data-panel="slides" role="tabpanel" aria-labelledby="tab-slides">
+            <form class="linkform compact" id="linkForm2">
+              <input id="linkInput2" type="url" inputmode="url" placeholder="Add from a Google Slides, PDF or image link" aria-label="Link to more slides">
+              <button class="btn small primary" type="submit">Add</button>
+            </form>
+            <div class="thumbs" id="thumbs"></div>
+            <div class="slides-foot">
+              <span class="muted small" id="calibStatus"></span>
+              <button class="link" id="calibBtn" type="button" data-tip="Match a credit card on screen so life size is exact on this display">Calibrate</button>
+              <span class="spacer"></span>
+              <button class="btn small ghost" id="copyLinkBtn" type="button" hidden data-tip="Copy a Back Row link that opens this deck at this slide">Copy link</button>
+              <button class="btn small ghost" id="clearBtn" type="button" data-tip="Remove all slides">Start over</button>
+            </div>
+          </section>
+        </aside>
       </section>
     </main>
 
