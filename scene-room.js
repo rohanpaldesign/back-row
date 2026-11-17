@@ -1,7 +1,8 @@
 // First-person view from a seat in a real lecture room: a 3D box with a raked
 // floor, side walls, a ceiling with recessed lights, the screen on the front wall,
-// and rows of seats with people in them. Drawn as a pinhole camera whose focal
-// length is the user's own viewing distance in screen pixels, so it is life size.
+// and rows of seats with people in them. Drawn as a pinhole camera at the seat,
+// turned to face the screen, whose focal length is the user's own viewing
+// distance in screen pixels, so it is life size.
 
 import { EYE_HEIGHT, ROW_GAP, RAKE, SEATS_PER_ROW, USER_DISTANCE, AISLE_X, seatOffset, seatTaken } from './presets.js';
 import { resample, physical } from './simulate.js';
@@ -211,8 +212,8 @@ function person(ctx, cx, top, bottom, s, r, look, dark) {
 }
 
 // The back of an upholstered seat, seen from behind.
-function chairBack(ctx, cx, top, bottom, s, look) {
-  const w = CHAIR_W * s;
+function chairBack(ctx, cx, top, bottom, s, look, wPx) {
+  const w = wPx ?? CHAIR_W * s;
   const g = ctx.createLinearGradient(0, top, 0, top + 0.5 * s);
   g.addColorStop(0, lit(look.chair, 1, 1.35));
   g.addColorStop(0.12, lit(look.chair, 1, 1.05));
@@ -230,7 +231,9 @@ function chairBack(ctx, cx, top, bottom, s, look) {
 }
 
 /**
- * Draws the room into `canvas`.
+ * Draws the room into `canvas`. The camera sits at the chosen seat and turns to
+ * face the screen, so a seat at the end of a row sees the screen at an angle:
+ * narrower, with its near edge taller, and more of the far side wall.
  * @returns {{cssW:number, cssH:number, focusX:number, focusY:number, scaled:boolean, lifeRatio:number}}
  */
 export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, fit, viewW, viewH, colors }) {
@@ -240,34 +243,77 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
   const screen = cfg.screen;
   const SW = screen.width;
   const SH = (SW * 9) / 16;
+  const SC = screen.center - RAKE * rowsAhead; // mounted on the stage, which is lower than you
   const look = LOOK[cfg.lightId];
   const dark = cfg.lightId === 'dark';
+
+  // Turn towards the centre of the screen.
+  const Dc = Math.hypot(D, Xv);
+  const cosY = D / Dc;
+  const sinY = -Xv / Dc;
 
   const life = USER_DISTANCE * 1000 * ppm;
   let f = life;
   let scaled = false;
   if (fit) {
-    // Overview: show the whole front of the room.
-    const k = Math.min(1, (viewW * 0.92) / ((f * ROOM_W) / D), (viewH * 0.5) / ((f * (CEIL + 0.5)) / D));
+    // Natural view: about 70 degrees across, roughly what your eyes take in.
+    const k = Math.min(1, viewW / 1.4 / f);
     if (k < 1) {
       f *= k;
       scaled = true;
     }
   }
 
-  const sw = (f * SW) / D;
-  const sh = (f * SH) / D;
-  const roomPx = (f * ROOM_W) / D;
+  const sw = (f * SW * cosY) / Dc;
+  const sh = (f * SH) / Dc;
+  const roomPx = (f * ROOM_W) / Dc;
   const cssW = Math.ceil(Math.max(viewW, sw + 240, Math.min(roomPx * 1.2, viewW * 2.6)));
-  const cssH = Math.ceil(Math.max(viewH, sh + 240));
+  const cssH = Math.ceil(Math.max(viewH, sh * 1.15 + 240));
   const scx = cssW / 2;
-  const scy = Math.max(sh / 2 + 120, cssH * 0.32);
-  const horizon = scy + (f * (screen.center - EYE_HEIGHT)) / D;
-  const originX = scx + (f * Xv) / D;
-  const X = (x, z) => originX + (f * (x - Xv)) / z;
-  const Y = (h, z) => horizon - (f * (h - EYE_HEIGHT)) / z;
-  const P = (x, h, z) => [X(x, z), Y(h, z)];
-  // The floor rises a step per row towards the viewer; flat in front of the first row.
+  const scy = Math.max(sh * 0.6 + 120, cssH * 0.32);
+  const horizon = scy + (f * (SC - EYE_HEIGHT)) / Dc;
+
+  // World (x across, h up, z towards the screen) to camera space.
+  const cam = (x, h, z) => {
+    const dx = x - Xv;
+    return [dx * cosY - z * sinY, h - EYE_HEIGHT, dx * sinY + z * cosY];
+  };
+  const proj = ([cx, ch, cz]) => [scx + (f * cx) / cz, horizon - (f * ch) / cz];
+  const depth = (x, z) => (x - Xv) * sinY + z * cosY;
+  const P = (x, h, z) => {
+    const c = cam(x, h, z);
+    c[2] = Math.max(c[2], 0.05);
+    return proj(c);
+  };
+  // A flat polygon in the room, clipped to what is in front of the camera.
+  const NEARC = 0.08;
+  const path3 = (pts) => {
+    const cs = pts.map(([x, h, z]) => cam(x, h, z));
+    const out = [];
+    for (let i = 0; i < cs.length; i++) {
+      const a = cs[i];
+      const b = cs[(i + 1) % cs.length];
+      const ina = a[2] >= NEARC;
+      const inb = b[2] >= NEARC;
+      if (ina) out.push(a);
+      if (ina !== inb) {
+        const t = (NEARC - a[2]) / (b[2] - a[2]);
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, NEARC]);
+      }
+    }
+    if (out.length < 3) return false;
+    ctx.beginPath();
+    out.map(proj).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    return true;
+  };
+  const poly3 = (pts, fill) => {
+    if (!path3(pts)) return;
+    ctx.fillStyle = fill;
+    ctx.fill();
+  };
+  const quad = (x0, h0, x1, h1, z, fill) => poly3([[x0, h1, z], [x1, h1, z], [x1, h0, z], [x0, h0, z]], fill);
+  // The floor rises a step per row towards the viewer (and behind them); flat in front of the first row.
   const floorAt = (z) => -RAKE * Math.min(z / ROW_GAP, rowsAhead);
 
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -281,6 +327,7 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
 
   const L = -ROOM_W / 2;
   const R = ROOM_W / 2;
+  const BACK = -10; // the walls run on behind the viewer
   const fD = floorAt(D);
   const zBend = Math.min(D, rowsAhead * ROW_GAP);
 
@@ -288,102 +335,102 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
   ctx.fillStyle = look.ceil;
   ctx.fillRect(0, 0, cssW, cssH);
   // Side walls.
-  for (const [x, ex] of [[L, 0], [R, cssW]]) {
-    const pts = [P(x, CEIL, D), P(x, CEIL, NEAR), P(x, floorAt(NEAR), NEAR)];
-    if (zBend > NEAR) pts.push(P(x, floorAt(zBend), zBend));
-    pts.push(P(x, fD, D));
-    const g = ctx.createLinearGradient(X(x, D), 0, ex, 0);
+  for (const x of [L, R]) {
+    const [far] = P(x, EYE_HEIGHT, D);
+    const g = ctx.createLinearGradient(far, 0, far < scx ? 0 : cssW, 0);
     g.addColorStop(0, look.sideFar);
     g.addColorStop(1, look.side);
-    poly(ctx, pts, g);
+    poly3([[x, CEIL, BACK], [x, CEIL, D], [x, fD, D], [x, floorAt(zBend), zBend], [x, floorAt(BACK), BACK]], g);
   }
-  // Floor (carpet).
+  // Floor (carpet): the raked part and the flat part in front of the first row.
   {
-    const pts = [P(L, fD, D), P(R, fD, D)];
-    if (zBend > NEAR) pts.push(P(R, floorAt(zBend), zBend));
-    pts.push(P(R, floorAt(NEAR), NEAR), P(L, floorAt(NEAR), NEAR));
-    if (zBend > NEAR) pts.push(P(L, floorAt(zBend), zBend));
-    const g = ctx.createLinearGradient(0, Y(fD, D), 0, cssH);
+    const g = ctx.createLinearGradient(0, P(0, fD, D)[1], 0, cssH);
     g.addColorStop(0, look.floor[0]);
     g.addColorStop(1, look.floor[1]);
-    poly(ctx, pts, g);
+    poly3([[L, floorAt(BACK), BACK], [R, floorAt(BACK), BACK], [R, floorAt(zBend), zBend], [L, floorAt(zBend), zBend]], g);
+    poly3([[L, fD, zBend], [R, fD, zBend], [R, fD, D], [L, fD, D]], g);
   }
   // Ceiling lights (2x2 ft recessed panels).
-  for (let z = D - 1.5; z > 0.9; z -= 3) {
+  for (let z = D - 1.5; z > -4; z -= 3) {
     for (const x of [-7.5, -2.5, 2.5, 7.5]) {
-      const q = [P(x - 0.3, CEIL, z + 0.3), P(x + 0.3, CEIL, z + 0.3), P(x + 0.3, CEIL, z - 0.3), P(x - 0.3, CEIL, z - 0.3)];
+      const dz = depth(x, z);
+      if (dz < 0.4) continue;
       if (look.lampGlow) {
         const [gx, gy] = P(x, CEIL, z);
-        const rad = (f * 0.9) / z;
+        const rad = (f * 0.9) / dz;
         const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, rad);
         g.addColorStop(0, `rgba(255,252,240,${look.lampGlow * 0.5})`);
         g.addColorStop(1, 'rgba(255,252,240,0)');
         ctx.fillStyle = g;
         ctx.fillRect(gx - rad, gy - rad, rad * 2, rad * 2);
       }
-      poly(ctx, q, look.lamp);
+      poly3([[x - 0.3, CEIL, z + 0.3], [x + 0.3, CEIL, z + 0.3], [x + 0.3, CEIL, z - 0.3], [x - 0.3, CEIL, z - 0.3]], look.lamp);
     }
   }
 
   // Front wall.
-  const [fx0, fy0] = P(L, CEIL, D);
-  const [fx1, fy1] = P(R, fD, D);
-  const fw = ctx.createLinearGradient(0, fy0, 0, fy1);
-  fw.addColorStop(0, look.front[0]);
-  fw.addColorStop(1, look.front[1]);
-  ctx.fillStyle = fw;
-  ctx.fillRect(fx0, fy0, fx1 - fx0, fy1 - fy0);
-  // Wall panel seams and the skirting board.
-  ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  for (let x = L + 1.25; x < R; x += 1.25) {
-    const [px] = P(x, 0, D);
-    ctx.fillRect(px, fy0, Math.max(1, f * 0.004 / D), fy1 - fy0);
+  {
+    const g = ctx.createLinearGradient(0, P(0, CEIL, D)[1], 0, P(0, fD, D)[1]);
+    g.addColorStop(0, look.front[0]);
+    g.addColorStop(1, look.front[1]);
+    quad(L, fD, R, CEIL, D, g);
+    // Wall panel seams, the skirting board and the corners.
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = Math.max(1, (f * 0.004) / Dc);
+    ctx.beginPath();
+    for (let x = L + 1.25; x < R; x += 1.25) {
+      const a = P(x, CEIL, D);
+      const b = P(x, fD, D);
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+    }
+    ctx.stroke();
+    quad(L, fD, R, fD + 0.1, D, look.base);
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (const [a, b] of [[P(L, CEIL, D), P(L, fD, D)], [P(R, CEIL, D), P(R, fD, D)], [P(L, CEIL, D), P(R, CEIL, D)]]) {
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+    }
+    ctx.stroke();
   }
-  const [, skirt] = P(0, fD + 0.1, D);
-  ctx.fillStyle = look.base;
-  ctx.fillRect(fx0, skirt, fx1 - fx0, fy1 - skirt);
-  // Corners where the walls meet.
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(fx0 - 1, fy0, 2, fy1 - fy0);
-  ctx.fillRect(fx1 - 1, fy0, 2, fy1 - fy0);
-  ctx.fillRect(fx0, fy0 - 1, fx1 - fx0, 2);
 
   // A door with an exit sign, front right.
   {
     const dx0 = R - 1.7;
     const dx1 = R - 0.7;
-    const [ax, ay] = P(dx0, fD + 2.1, D);
-    const [bx, by] = P(dx1, fD, D);
-    ctx.fillStyle = lit('#8a7b6a', look.k);
-    ctx.fillRect(ax, ay, bx - ax, by - ay);
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = Math.max(1, (f * 0.03) / D);
-    ctx.strokeRect(ax, ay, bx - ax, by - ay);
-    ctx.fillStyle = lit('#c9c4ba', Math.max(look.k, 0.4));
-    ctx.fillRect(bx - (bx - ax) * 0.18, ay + (by - ay) * 0.5, (bx - ax) * 0.1, Math.max(1, (f * 0.02) / D));
-    const [ex, ey] = P(dx0 + 0.32, fD + 2.42, D);
-    const [ex1, ey1] = P(dx1 - 0.32, fD + 2.26, D);
+    if (path3([[dx0, fD + 2.1, D], [dx1, fD + 2.1, D], [dx1, fD, D], [dx0, fD, D]])) {
+      ctx.fillStyle = lit('#8a7b6a', look.k);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = Math.max(1, (f * 0.03) / Dc);
+      ctx.stroke();
+    }
+    quad(dx1 - 0.2, fD + 1.02, dx1 - 0.1, fD + 1.06, D, lit('#c9c4ba', Math.max(look.k, 0.4)));
+    const ex0 = dx0 + 0.32;
+    const ex1 = dx1 - 0.32;
+    const [ecx, ecy] = P((ex0 + ex1) / 2, fD + 2.34, D);
+    const ew = Math.abs(P(ex1, fD + 2.34, D)[0] - P(ex0, fD + 2.34, D)[0]);
+    const eh = Math.abs(P((ex0 + ex1) / 2, fD + 2.26, D)[1] - P((ex0 + ex1) / 2, fD + 2.42, D)[1]);
     if (dark || cfg.lightId === 'dim') {
-      const g = ctx.createRadialGradient((ex + ex1) / 2, (ey + ey1) / 2, 0, (ex + ex1) / 2, (ey + ey1) / 2, (ex1 - ex) * 1.4);
+      const g = ctx.createRadialGradient(ecx, ecy, 0, ecx, ecy, ew * 1.4);
       g.addColorStop(0, 'rgba(40,200,110,0.35)');
       g.addColorStop(1, 'rgba(40,200,110,0)');
       ctx.fillStyle = g;
-      ctx.fillRect(ex - (ex1 - ex), ey - (ex1 - ex), (ex1 - ex) * 3, (ex1 - ex) * 3);
+      ctx.fillRect(ecx - ew * 1.5, ecy - ew * 1.5, ew * 3, ew * 3);
     }
-    ctx.fillStyle = '#1aa457';
-    ctx.fillRect(ex, ey, ex1 - ex, ey1 - ey);
-    if (ey1 - ey > 7) {
+    quad(ex0, fD + 2.26, ex1, fD + 2.42, D, '#1aa457');
+    if (eh > 7 && ew > eh * 1.6) {
       ctx.fillStyle = '#fff';
-      ctx.font = `600 ${Math.round((ey1 - ey) * 0.7)}px Inter, system-ui, sans-serif`;
+      ctx.font = `600 ${Math.round(eh * 0.7)}px Inter, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('EXIT', (ex + ex1) / 2, (ey + ey1) / 2 + 0.5);
+      ctx.fillText('EXIT', ecx, ecy + 0.5, ew * 0.9);
     }
   }
 
   // Glow the screen throws on the wall.
-  const sx0 = scx - sw / 2;
-  const sy0 = scy - sh / 2;
   if (look.glow) {
     const g = ctx.createRadialGradient(scx, scy, sh * 0.2, scx, scy, Math.max(sw, sh) * 1.2);
     g.addColorStop(0, `rgba(185,200,255,${look.glow})`);
@@ -393,52 +440,65 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
   }
 
   // Screen.
+  const sTop = SC + SH / 2;
+  const sBot = SC - SH / 2;
   const tone = cfg.light[screen.kind];
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = Math.max(6, sh * 0.05);
   ctx.shadowOffsetY = Math.max(2, sh * 0.015);
   if (screen.kind === 'tv') {
-    const b = Math.max(2, (f * 0.012) / D);
-    ctx.fillStyle = '#060606';
-    roundRect(ctx, sx0 - b, sy0 - b, sw + 2 * b, sh + 2 * b, b * 1.4);
-    ctx.fill();
+    const b = 0.012;
+    quad(-SW / 2 - b, sBot - b, SW / 2 + b, sTop + b, D, '#060606');
   } else {
     // Pull-down screen: matte surface with a black border, hanging from a case.
-    const b = Math.max(3, (f * 0.06) / D);
+    const b = 0.06;
     const surface = Math.round(235 * (dark ? 0.55 : cfg.lightId === 'dim' ? 0.75 : 0.92));
-    ctx.fillStyle = `rgb(${surface},${surface},${surface - 3})`;
-    ctx.fillRect(sx0 - b, sy0 - b, sw + 2 * b, sh + 2 * b);
+    quad(-SW / 2 - b, sBot - b, SW / 2 + b, sTop + b, D, `rgb(${surface},${surface},${surface - 3})`);
     ctx.shadowColor = 'transparent';
-    const caseH = Math.max(4, (f * 0.09) / D);
-    ctx.fillStyle = '#2b2b2e';
-    roundRect(ctx, sx0 - b * 1.6, sy0 - b - caseH, sw + 3.2 * b, caseH, caseH / 2);
-    ctx.fill();
+    quad(-SW / 2 - b * 1.6, sTop + b, SW / 2 + b * 1.6, sTop + b + 0.09, D, '#2b2b2e');
   }
   ctx.restore();
-  ctx.fillStyle = `rgb(${tone.black},${tone.black},${tone.black})`;
-  ctx.fillRect(sx0, sy0, sw, sh);
+  quad(-SW / 2, sBot, SW / 2, sTop, D, `rgb(${tone.black},${tone.black},${tone.black})`);
 
-  // The slide, letterboxed on the screen.
+  // The slide, letterboxed on the screen and drawn in thin vertical strips so it
+  // takes the screen's perspective.
   const { W } = physical(cfg, slide.width, slide.height);
-  const rw = (f * W) / D;
-  const rh = (rw * slide.height) / slide.width;
-  const rx = scx - rw / 2;
-  const ry = scy - rh / 2;
-  ctx.drawImage(resample(image, Math.max(1, Math.round(rw * dpr)), Math.max(1, Math.round(rh * dpr))), rx, ry, rw, rh);
+  const Hs = (W * slide.height) / slide.width;
+  {
+    const yt = SC + Hs / 2;
+    const yb = SC - Hs / 2;
+    const a = P(-W / 2, yt, D);
+    const b = P(W / 2, yt, D);
+    const pw = Math.abs(b[0] - a[0]);
+    const ph = Math.max(P(-W / 2, yb, D)[1] - a[1], P(W / 2, yb, D)[1] - b[1]);
+    const src = resample(image, Math.max(1, Math.round(pw * dpr)), Math.max(1, Math.round(ph * dpr)));
+    const n = Math.abs(sinY) < 0.01 ? 1 : Math.max(1, Math.min(480, Math.ceil(pw / 1.5)));
+    for (let i = 0; i < n; i++) {
+      const u0 = i / n;
+      const u1 = (i + 1) / n;
+      const t0 = P(-W / 2 + u0 * W, yt, D);
+      const t1 = P(-W / 2 + u1 * W, yt, D);
+      const b0 = P(-W / 2 + u0 * W, yb, D);
+      const b1 = P(-W / 2 + u1 * W, yb, D);
+      const top = (t0[1] + t1[1]) / 2;
+      const bot = (b0[1] + b1[1]) / 2;
+      ctx.drawImage(src, u0 * src.width, 0, Math.max(1, (u1 - u0) * src.width), src.height,
+        t0[0], top, t1[0] - t0[0] + (n > 1 ? 0.6 : 0), bot - top);
+    }
+  }
   if (overlay && analysis) {
-    const a = analysis;
-    const kx = rw / a.w;
-    const ky = rh / a.h;
+    const an = analysis;
     ctx.globalAlpha = 0.45;
-    for (let cy = 0; cy < a.rows; cy++) {
-      for (let cx = 0; cx < a.cols; cx++) {
-        const t = a.grid[cy * a.cols + cx];
+    for (let cy = 0; cy < an.rows; cy++) {
+      for (let cx = 0; cx < an.cols; cx++) {
+        const t = an.grid[cy * an.cols + cx];
         if (!t) continue;
-        ctx.fillStyle = t === TOO_SMALL ? colors.small : colors.faint;
-        const x0 = rx + cx * a.cell * kx;
-        const y0 = ry + cy * a.cell * ky;
-        ctx.fillRect(x0, y0, rx + Math.min(a.w, (cx + 1) * a.cell) * kx - x0, ry + Math.min(a.h, (cy + 1) * a.cell) * ky - y0);
+        const x0 = -W / 2 + (cx * an.cell * W) / an.w;
+        const x1 = -W / 2 + (Math.min(an.w, (cx + 1) * an.cell) * W) / an.w;
+        const h0 = SC + Hs / 2 - (cy * an.cell * Hs) / an.h;
+        const h1 = SC + Hs / 2 - (Math.min(an.h, (cy + 1) * an.cell) * Hs) / an.h;
+        quad(x0, h1, x1, h0, D, t === TOO_SMALL ? colors.small : colors.faint);
       }
     }
     ctx.globalAlpha = 1;
@@ -447,82 +507,90 @@ export function renderRoom({ canvas, slide, image, analysis, overlay, cfg, ppm, 
   // Lectern, front left of the screen, with the presenter's laptop.
   {
     const lx = -SW / 2 - 0.85;
-    const lz = D - 0.7;
-    const [ax, ay] = P(lx - 0.3, fD + 1.08, lz);
-    const [bx, by] = P(lx + 0.3, fD, lz);
-    const g = ctx.createLinearGradient(ax, 0, bx, 0);
-    g.addColorStop(0, lit('#5b4433', look.k, 0.85));
-    g.addColorStop(1, lit('#7a5c45', look.k));
-    ctx.fillStyle = g;
-    ctx.fillRect(ax, ay, bx - ax, by - ay);
-    const [tx, ty] = P(lx - 0.34, fD + 1.12, lz);
-    ctx.fillStyle = lit('#8d6c52', look.k, 1.1);
-    ctx.fillRect(tx, ty, (bx - ax) * 1.13, ay - ty + 1);
-    const [qx, qy] = P(lx - 0.15, fD + 1.32, lz + 0.1);
-    const [qx1, qy1] = P(lx + 0.15, fD + 1.12, lz + 0.1);
-    ctx.fillStyle = dark ? '#7f93c9' : '#2a2b30';
-    ctx.fillRect(qx, qy, qx1 - qx, qy1 - qy);
+    const zf = D - 0.95; // front face
+    const zb = D - 0.45;
+    const sideX = Xv > lx ? lx + 0.3 : lx - 0.3;
+    poly3([[sideX, fD + 1.08, zf], [sideX, fD + 1.08, zb], [sideX, fD, zb], [sideX, fD, zf]], lit('#5b4433', look.k, 0.75));
+    quad(lx - 0.3, fD, lx + 0.3, fD + 1.08, zf, lit('#7a5c45', look.k));
+    poly3([[lx - 0.34, fD + 1.1, zf - 0.04], [lx + 0.34, fD + 1.1, zf - 0.04], [lx + 0.34, fD + 1.1, zb], [lx - 0.34, fD + 1.1, zb]], lit('#8d6c52', look.k, 1.1));
+    quad(lx - 0.15, fD + 1.1, lx + 0.15, fD + 1.3, zf + 0.2, dark ? '#7f93c9' : '#2a2b30');
   }
 
   // Ceiling projector and its beam, visible in a dim or dark room.
   if (screen.kind === 'projector') {
     const zp = D - SW * 1.5;
-    if (zp > 1.2) {
+    if (depth(0, zp) > 1.2) {
       const hp = CEIL - 0.32;
       if (look.beam) {
-        const [lxp, lyp] = P(0, hp, zp);
-        const g = ctx.createLinearGradient(lxp, lyp, scx, scy);
+        const lens = P(0, hp, zp);
+        const corners = [P(-SW / 2, sTop, D), P(SW / 2, sTop, D), P(SW / 2, sBot, D), P(-SW / 2, sBot, D)];
+        const g = ctx.createLinearGradient(lens[0], lens[1], scx, scy);
         g.addColorStop(0, `rgba(220,230,255,${look.beam * 2.5})`);
         g.addColorStop(1, `rgba(220,230,255,${look.beam * 0.4})`);
-        poly(ctx, [[lxp, lyp], [sx0, sy0], [sx0 + sw, sy0], [sx0 + sw, sy0 + sh], [sx0, sy0 + sh]], g);
+        poly(ctx, [lens, ...corners], g);
       }
+      const dz = depth(0, zp);
       const [mx, my] = P(0, CEIL, zp);
       const [, mh] = P(0, hp + 0.08, zp);
       ctx.fillStyle = lit('#9b9ba0', Math.max(look.k, 0.3));
-      ctx.fillRect(mx - Math.max(1, (f * 0.02) / zp), my, Math.max(2, (f * 0.04) / zp), mh - my);
-      const [bx0, by0] = P(-0.2, hp + 0.08, zp);
-      const [bx1, by1] = P(0.2, hp - 0.08, zp);
-      ctx.fillStyle = lit('#d7d7da', Math.max(look.k, 0.25));
-      roundRect(ctx, bx0, by0, bx1 - bx0, by1 - by0, (f * 0.02) / zp);
-      ctx.fill();
+      ctx.fillRect(mx - Math.max(1, (f * 0.02) / dz), my, Math.max(2, (f * 0.04) / dz), mh - my);
+      poly3([[-0.2, hp + 0.08, zp - 0.15], [0.2, hp + 0.08, zp - 0.15], [0.2, hp - 0.08, zp - 0.15], [-0.2, hp - 0.08, zp - 0.15]], lit('#d7d7da', Math.max(look.k, 0.25)));
     }
   }
 
-  // Rows, far to near: aisle step lights, the people, then the seat backs in front of them.
+  // Rows, far to near: aisle step lights, then each person followed by the seat
+  // back in front of them, far to near along the row (it is seen at an angle).
   const aisles = [AISLE_X[0], AISLE_X[1], seatOffset(0, 0) - 0.7, seatOffset(0, SEATS_PER_ROW - 1) + 0.7];
   for (let kRow = rowsAhead; kRow >= 1; kRow--) {
     const z = kRow * ROW_GAP;
     const seatRow = cfg.row - kRow;
     const fl = floorAt(z);
-    const s = f / z;
-    const blur = z < 2.6 ? Math.min(5, s * 0.0016 * (2.6 - z)) : 0;
-    if (blur > 0.4) ctx.filter = `blur(${blur.toFixed(1)}px)`;
     if (!look.lampGlow || dark) {
       for (const ax of aisles) {
+        const dz = depth(ax, z + 0.45);
+        if (dz < 0.3) continue;
         const [px, py] = P(ax, fl + 0.05, z + 0.45);
         ctx.fillStyle = 'rgba(255,196,120,0.75)';
         ctx.beginPath();
-        ctx.arc(px, py, Math.max(1, (f * 0.025) / (z + 0.45)), 0, Math.PI * 2);
+        ctx.arc(px, py, Math.max(1, (f * 0.025) / dz), 0, Math.PI * 2);
         ctx.fill();
       }
     }
     const seats = [];
     for (let col = 0; col < SEATS_PER_ROW; col++) {
       const x = seatOffset(seatRow, col);
-      const px = X(x, z);
+      const dz = depth(x, z);
+      if (dz < 0.45) continue;
+      const s = f / dz;
+      const [px] = P(x, fl, z);
       if (px < -0.6 * s || px > cssW + 0.6 * s) continue;
-      seats.push({ col, x });
+      seats.push({ col, x, dz, s });
     }
-    for (const { col, x } of seats) {
-      if (!seatTaken(seatRow, col)) continue;
-      const r = rng(seatRow * 131 + col * 17 + 7);
-      const lean = (r() - 0.5) * 0.07;
-      const top = fl + HEAD_TOP + (r() - 0.5) * 0.11;
-      person(ctx, X(x + lean, z), Y(top, z), Y(fl, z), s, r, look, dark);
+    seats.sort((p, q) => q.dz - p.dz);
+    for (const { col, x, dz, s } of seats) {
+      const blur = dz < 2.6 ? Math.min(5, s * 0.0016 * (2.6 - dz)) : 0;
+      if (blur > 0.4) ctx.filter = `blur(${blur.toFixed(1)}px)`;
+      if (seatTaken(seatRow, col)) {
+        const r = rng(seatRow * 131 + col * 17 + 7);
+        let lean = (r() - 0.5) * 0.07;
+        // People settle so you can see: the row just ahead leaves a gap for your
+        // line of sight, and the head two rows ahead sits in it, just over the
+        // bottom of the screen from the back of the room.
+        const dx = x + lean - (Xv - (Xv * kRow) / D);
+        if (kRow === 1 && Math.abs(dx) < 0.22) lean += Math.sign(dx || 1) * (0.22 - Math.abs(dx));
+        const inLine = kRow === 2 && Math.abs(dx) < 0.3;
+        if (inLine) lean -= dx * 0.9;
+        const top = fl + HEAD_TOP + (r() - 0.5) * (inLine ? 0.02 : 0.08);
+        const [hx, hy] = P(x + lean, top, z);
+        person(ctx, hx, hy, P(x, fl, z)[1], s, r, look, dark);
+      }
+      const zc = z - 0.16;
+      const left = P(x - CHAIR_W / 2, fl + CHAIR_TOP, zc);
+      const right = P(x + CHAIR_W / 2, fl + CHAIR_TOP, zc);
+      const [, cb] = P(x, fl, zc);
+      chairBack(ctx, (left[0] + right[0]) / 2, (left[1] + right[1]) / 2, cb, f / depth(x, zc), look, Math.abs(right[0] - left[0]));
+      ctx.filter = 'none';
     }
-    const zc = z - 0.16;
-    for (const { x } of seats) chairBack(ctx, X(x, zc), Y(fl + CHAIR_TOP, zc), Y(fl, zc), f / zc, look);
-    ctx.filter = 'none';
   }
 
   // Soft vignette.

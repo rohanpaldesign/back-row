@@ -136,11 +136,13 @@
             <div class="room-only group">
               <span class="label">Where you sit</span>
               <div class="seat-read"><span class="midnum" id="seatDist">9 m</span><span class="muted" id="seatRows"></span></div>
-              <div class="seatmap" id="seatMap">
-                <div class="stage"><span>Screen</span></div>
-                <div id="seatRowsEl"></div>
+              <div class="seatmap" id="seatMap" aria-label="Seating plan. Drag to move around, click a seat to sit there.">
+                <div class="seatmap-inner">
+                  <div class="stage"><span>Screen</span></div>
+                  <div id="seatRowsEl"></div>
+                </div>
               </div>
-              <div class="seatkey muted small"><span><i class="k you"></i>You</span><span><i class="k taken"></i>Someone sitting</span><span><i class="k"></i>Empty</span></div>
+              <div class="seatkey muted small"><span><i class="k you"></i>You</span><span><i class="k taken"></i>Someone sitting</span><span><i class="k"></i>Empty</span><span>Drag to move around</span></div>
             </div>
             <div class="call-only group">
               <span class="label">Watching on</span>

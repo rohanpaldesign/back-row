@@ -43,7 +43,7 @@ const state = {
   idx: 0,
   mode: store.get('mode', 'room'),
   screen: store.get('screen', 'proj100'),
-  seatRow: Number(store.get('seatRow', 7)),
+  seatRow: Number(store.get('seatRow', 5)),
   seatCol: Number(store.get('seatCol', 13)),
   light: store.get('light', 'bright'),
   app: store.get('app', 'zoom'),
@@ -52,7 +52,7 @@ const state = {
   recv: store.get('recv', '720'),
   scale: store.get('scale', 'auto'),
   overlay: store.get('overlay', true) !== false,
-  fit: store.get('fit', false) === true,
+  fitRoom: store.get('fitRoom', true) !== false,
   fitCall: store.get('fitCall', true) !== false,
   view: 'scene',
   tab: store.get('tab', 'where'),
@@ -68,7 +68,7 @@ if (!byId(LAYOUTS, state.layout)) state.layout = 'speaker';
 if (!byId(RECEIVED, state.recv)) state.recv = '720';
 if (!byId(SCALES, state.scale)) state.scale = 'auto';
 if (!['result', 'where', 'setup', 'slides'].includes(state.tab)) state.tab = 'where';
-if (!(Number.isInteger(state.seatRow) && state.seatRow >= 0 && state.seatRow < ROWS)) state.seatRow = 7;
+if (!(Number.isInteger(state.seatRow) && state.seatRow >= 0 && state.seatRow < ROWS)) state.seatRow = 5;
 if (!(Number.isInteger(state.seatCol) && state.seatCol >= 0 && state.seatCol < SEATS_PER_ROW)) state.seatCol = 13;
 if (!(typeof state.pxPerMm === 'number' && state.pxPerMm > 1 && state.pxPerMm < 20)) state.pxPerMm = null;
 
@@ -77,7 +77,7 @@ const el = Object.fromEntries([
   'crumb', 'slideName', 'context',
   'viewSeg', 'lifePill', 'viewport', 'scene', 'roomCv', 'callHost', 'panHint', 'overlayBtn', 'fitBtn', 'busy',
   'resultBody', 'modeTabs', 'resultTabLbl', 'slidesTabLbl', 'viewSceneBtn',
-  'seatDist', 'seatRows', 'seatRowsEl', 'scenePrev', 'sceneNext', 'sceneCount', 'sceneNav',
+  'seatDist', 'seatRows', 'seatRowsEl', 'seatMap', 'scenePrev', 'sceneNext', 'sceneCount', 'sceneNav',
   'linkForm', 'linkInput', 'linkForm2', 'linkInput2', 'copyLinkBtn', 'screenTiles', 'lightTiles',
   'appTiles', 'layoutHead', 'layoutSeg', 'deviceTiles', 'recvTiles', 'scaleSeg',
   'thumbs', 'calibStatus', 'calibBtn', 'calibDlg', 'card', 'cardRange', 'dropVeil', 'toast',
@@ -120,6 +120,7 @@ function syncTabs() {
     b.tabIndex = on ? 0 : -1;
   }
   for (const pn of panels) pn.hidden = pn.dataset.panel !== state.tab;
+  if (state.tab === 'where') requestAnimationFrame(() => typeof centerSeat === 'function' && centerSeat());
 }
 syncTabs();
 
@@ -136,7 +137,7 @@ function cfg() {
       row: state.seatRow,
       distance: seatDistance(state.seatRow),
       offset: seatOffset(state.seatRow, state.seatCol),
-      key: `room|${screen.id}|${state.seatRow}|${state.light}`,
+      key: `room|${screen.id}|${state.seatRow}|${state.seatCol}|${state.light}`,
     };
   }
   const recv = byId(RECEIVED, state.recv);
@@ -150,7 +151,7 @@ function cfg() {
 }
 
 function persist() {
-  for (const k of ['mode', 'screen', 'seatRow', 'seatCol', 'light', 'app', 'device', 'layout', 'recv', 'scale', 'overlay', 'fit', 'fitCall', 'tab']) {
+  for (const k of ['mode', 'screen', 'seatRow', 'seatCol', 'light', 'app', 'device', 'layout', 'recv', 'scale', 'overlay', 'fitRoom', 'fitCall', 'tab']) {
     store.set(k, state[k]);
   }
 }
@@ -223,10 +224,9 @@ function buildSeatMap() {
         b.setAttribute('aria-label', `Row ${r + 1}, seat ${c + 1}, ${seatDistance(r)} metres from the screen`);
         b.dataset.tip = `Row ${r + 1}, seat ${c + 1}: ${seatDistance(r)} m from the screen`;
         b.addEventListener('click', () => {
-          const rowChanged = state.seatRow !== r;
           state.seatRow = r;
           state.seatCol = c;
-          changed({ recompute: rowChanged });
+          changed();
         });
         block.appendChild(b);
       }
@@ -237,6 +237,54 @@ function buildSeatMap() {
   }
 }
 buildSeatMap();
+
+// The seating plan is bigger than the panel: drag it around like a map.
+{
+  const map = el.seatMap;
+  let start = null;
+  let dragged = false;
+  map.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    start = { x: e.clientX, y: e.clientY, l: map.scrollLeft, t: map.scrollTop, id: e.pointerId };
+    dragged = false;
+  });
+  map.addEventListener('pointermove', (e) => {
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (!dragged && Math.hypot(dx, dy) < 5) return;
+    if (!dragged) {
+      dragged = true;
+      map.classList.add('dragging');
+      map.setPointerCapture(e.pointerId);
+      hideTip();
+    }
+    map.scrollLeft = start.l - dx;
+    map.scrollTop = start.t - dy;
+  });
+  const end = () => {
+    start = null;
+    map.classList.remove('dragging');
+  };
+  map.addEventListener('pointerup', end);
+  map.addEventListener('pointercancel', end);
+  // A drag is not a click on the seat it ended on.
+  map.addEventListener('click', (e) => {
+    if (!dragged) return;
+    e.stopPropagation();
+    e.preventDefault();
+    dragged = false;
+  }, true);
+}
+// Bring your seat into the middle of the plan.
+function centerSeat() {
+  const you = el.seatMap.querySelector('.seat.you');
+  if (!you || !el.seatMap.clientWidth) return;
+  const m = el.seatMap.getBoundingClientRect();
+  const y = you.getBoundingClientRect();
+  el.seatMap.scrollLeft += y.left + y.width / 2 - (m.left + m.width / 2);
+  el.seatMap.scrollTop += y.top + y.height / 2 - (m.top + m.height / 2);
+}
 
 function peopleAhead() {
   let n = 0;
@@ -259,9 +307,10 @@ function syncSeatMap() {
   const ahead = state.seatRow;
   const people = peopleAhead();
   el.seatDist.textContent = `${seatDistance(state.seatRow)} m`;
-  el.seatRows.textContent = ahead === 0
+  const side = Math.round((Math.atan2(Math.abs(seatOffset(state.seatRow, state.seatCol)), seatDistance(state.seatRow)) * 180) / Math.PI);
+  el.seatRows.textContent = (ahead === 0
     ? 'Front row, nothing in the way'
-    : `${ahead} row${ahead === 1 ? '' : 's'} ahead, ${peopleText(people)} seated in them`;
+    : `${ahead} row${ahead === 1 ? '' : 's'} ahead, ${peopleText(people)} seated in them`) + (side >= 8 ? `. ${side}° off centre` : '');
 }
 
 el.viewSeg.addEventListener('click', (e) => {
@@ -272,10 +321,10 @@ el.viewSeg.addEventListener('click', (e) => {
   drawScene();
 });
 el.overlayBtn.addEventListener('click', () => { state.overlay = !state.overlay; changed({ recompute: false }); });
-const fitOn = () => (state.mode === 'call' ? state.fitCall : state.fit);
+const fitOn = () => (state.mode === 'call' ? state.fitCall : state.fitRoom);
 el.fitBtn.addEventListener('click', () => {
   if (state.mode === 'call') state.fitCall = !state.fitCall;
-  else state.fit = !state.fit;
+  else state.fitRoom = !state.fitRoom;
   changed({ recompute: false });
 });
 modeBtns.forEach((b) => b.addEventListener('click', () => {
@@ -323,7 +372,7 @@ function syncUI() {
     : 'Highlight problem areas: red is too small to read, amber is too faint.';
   el.fitBtn.dataset.tip = state.mode === 'call'
     ? (state.fitCall ? 'Show the device at life size, as big as it really looks' : 'Fit the whole device in the card')
-    : (state.fit ? 'Back to life size: the screen at the size it really looks from this seat' : 'Step back to see the whole front of the room (smaller than life)');
+    : (state.fitRoom ? 'Back to life size: the screen at the size it really looks from this seat' : 'Natural view: about what your eyes take in from this seat (smaller than life)');
   const cur = state.slides[state.idx];
   el.crumb.textContent = cur ? [cur.deck, crumbText()].filter(Boolean).join(' · ') : '';
   el.calibStatus.textContent = state.pxPerMm ? 'Screen calibrated' : 'Sizes assume a typical laptop';
@@ -693,6 +742,7 @@ function showWork() {
   buildThumbs();
   syncUI();
   renderCurrent();
+  requestAnimationFrame(centerSeat);
 }
 
 /* ---------- Rendering ---------- */

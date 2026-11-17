@@ -47,7 +47,11 @@ export function physical(c, w, h) {
   if (c.mode === 'room') {
     const sw = c.screen.width;
     const sh = (sw * 9) / 16;
-    return { W: Math.min(sw, sh * aspect), D: c.distance };
+    // From the side, the screen is further away and its text is squeezed
+    // across by cos(angle); count half of that squeeze (the geometric mean of
+    // the across and up-and-down sizes) as extra distance.
+    const along = Math.hypot(c.distance, c.offset || 0);
+    return { W: Math.min(sw, sh * aspect), D: along / Math.sqrt(c.distance / along) };
   }
   // The shared screen fills the call window's stage, letterboxed.
   const box = stageBox(c.app.id, c.device.id, c.layout.id);
