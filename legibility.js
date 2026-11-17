@@ -108,6 +108,95 @@ export function findRegions(grid, cols, rows, type) {
   return regions;
 }
 
+// Cells that belong to a picture (emoji, coloured icons, photos) rather than
+// text, so their fine detail isn't reported as unreadable text. A picture core
+// is a cell with solid colour (fills thicker than text strokes) that doesn't
+// fill the whole cell (so not a coloured background or banner), and is shaded
+// or irregular (so not a flat chart bar). Colourful cells up to two cells
+// around a core (an emoji's edges, confetti) join it.
+const CHROMA = 40;
+function pictureCells(canvas, w, h) {
+  const cell = Math.max(8, Math.round(w / 48));
+  const cols = Math.ceil(w / cell);
+  const rows = Math.ceil(h / cell);
+  const d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const col = new Uint8Array(w * h);
+  const lum = new Float32Array(w * h);
+  for (let p = 0, i = 0; p < col.length; p++, i += 4) {
+    const mx = Math.max(d[i], d[i + 1], d[i + 2]);
+    const mn = Math.min(d[i], d[i + 1], d[i + 2]);
+    col[p] = mx - mn > CHROMA ? 1 : 0;
+    lum[p] = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+  }
+  const R = 3;
+  const solidAt = (x, y) => x >= R && y >= R && x < w - R && y < h - R &&
+    col[y * w + x] && col[y * w + x - R] && col[y * w + x + R] && col[(y - R) * w + x] && col[(y + R) * w + x];
+  const frac = new Float32Array(cols * rows);
+  const core = new Uint8Array(cols * rows);
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const x0 = cx * cell;
+      const y0 = cy * cell;
+      const x1 = Math.min(w, x0 + cell);
+      const y1 = Math.min(h, y0 + cell);
+      let n = 0;
+      let c = 0;
+      let solid = 0;
+      let sum = 0;
+      let sum2 = 0;
+      let bx0 = 1e9;
+      let bx1 = -1;
+      let by0 = 1e9;
+      let by1 = -1;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          n++;
+          const p = y * w + x;
+          if (!col[p]) continue;
+          c++;
+          sum += lum[p];
+          sum2 += lum[p] * lum[p];
+          if (x < bx0) bx0 = x;
+          if (x > bx1) bx1 = x;
+          if (y < by0) by0 = y;
+          if (y > by1) by1 = y;
+          if (solidAt(x, y)) solid++;
+        }
+      }
+      const k = cy * cols + cx;
+      frac[k] = c / n;
+      if (c < 5 || solid < n * 0.12) continue;
+      const partial = bx0 > x0 || by0 > y0 || bx1 < x1 - 1 || by1 < y1 - 1;
+      if (!partial) continue;
+      const shaded = Math.sqrt(Math.max(0, sum2 / c - (sum / c) ** 2)) > 14;
+      const irregular = c < (bx1 - bx0 + 1) * (by1 - by0 + 1) * 0.85;
+      if (shaded || irregular) core[k] = 1;
+    }
+  }
+  const dist = new Int8Array(cols * rows).fill(-1);
+  const queue = [];
+  for (let k = 0; k < core.length; k++) if (core[k]) { dist[k] = 0; queue.push(k); }
+  for (let qi = 0; qi < queue.length; qi++) {
+    const k = queue[qi];
+    if (dist[k] >= 2) continue;
+    const x = k % cols;
+    const y = (k / cols) | 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const j = ny * cols + nx;
+        if (dist[j] < 0 && frac[j] >= 0.03) {
+          dist[j] = dist[k] + 1;
+          queue.push(j);
+        }
+      }
+    }
+  }
+  return (cx, cy) => dist[cy * cols + cx] >= 0;
+}
+
 /**
  * Compares the slide with what the audience perceives, cell by cell.
  * Detail is measured as total variation (sum of luminance steps). Blur keeps
@@ -128,7 +217,9 @@ export function analyze(src, sim) {
   const h = Math.max(1, Math.round((w * src.height) / src.width));
   const eyeWidth = Math.max(8, sim.theta / RAD_PER_ARCMIN / sim.eye);
 
-  const R = luminance(resample(src, w, h));
+  const base = resample(src, w, h);
+  const R = luminance(base);
+  const picture = pictureCells(base, w, h);
   const S = luminance(perceive(sim.sizeOnly, eyeWidth, w, h));
   const F = sim.sizeOnly === sim.degraded ? S : luminance(perceive(sim.degraded, eyeWidth, w, h));
 
@@ -173,6 +264,7 @@ export function analyze(src, sim) {
       const hasDetail = tvR / area > 6 && maxR - minR > 24;
       if (!hasDetail) continue;
       const k = cy * cols + cx;
+      if (picture(cx, cy)) continue; // emoji, icons, photos: not text
       if (tvS / tvR < SMALL_RATIO) grid[k] = TOO_SMALL;
       else if (maxF - minF < 45) grid[k] = TOO_FAINT;
     }
