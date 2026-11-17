@@ -45,20 +45,52 @@ function perceive(img, eyeWidth, w, h) {
   return out;
 }
 
+// Joins areas on the same line of text (up to 5 cells apart across, touching
+// up and down) so a line counts once.
+function mergeNear(list) {
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < list.length && !merged; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const p = list[i];
+        const q = list[j];
+        if (q.x0 <= p.x1 + 5 && p.x0 <= q.x1 + 5 && q.y0 <= p.y1 && p.y0 <= q.y1) {
+          p.x0 = Math.min(p.x0, q.x0);
+          p.y0 = Math.min(p.y0, q.y0);
+          p.x1 = Math.max(p.x1, q.x1);
+          p.y1 = Math.max(p.y1, q.y1);
+          p.cells += q.cells;
+          list.splice(j, 1);
+          merged = true;
+          break;
+        }
+      }
+    }
+  }
+  return list;
+}
+
 // Counts problem areas, treating cells up to two apart as one area so a line of
 // text counts once rather than once per gap between words.
-function countRegions(grid, cols, rows, type) {
+function findRegions(grid, cols, rows, type) {
   const seen = new Uint8Array(grid.length);
-  let regions = 0;
+  const regions = [];
   for (let i = 0; i < grid.length; i++) {
     if (grid[i] !== type || seen[i]) continue;
-    regions++;
+    const box = { type, x0: cols, y0: rows, x1: 0, y1: 0, cells: 0 };
+    regions.push(box);
     const stack = [i];
     seen[i] = 1;
     while (stack.length) {
       const j = stack.pop();
       const x = j % cols;
       const y = (j / cols) | 0;
+      box.cells++;
+      box.x0 = Math.min(box.x0, x);
+      box.y0 = Math.min(box.y0, y);
+      box.x1 = Math.max(box.x1, x + 1);
+      box.y1 = Math.max(box.y1, y + 1);
       for (let dy = -2; dy <= 2; dy++) {
         for (let dx = -2; dx <= 2; dx++) {
           const nx = x + dx;
@@ -153,8 +185,10 @@ export function analyze(src, sim) {
     cols,
     rows,
     grid,
-    small: countRegions(grid, cols, rows, TOO_SMALL),
-    faint: countRegions(grid, cols, rows, TOO_FAINT),
+    // Problem areas as boxes in grid cells, biggest first.
+    areas: [...mergeNear(findRegions(grid, cols, rows, TOO_SMALL)), ...mergeNear(findRegions(grid, cols, rows, TOO_FAINT))].sort((p, q) => q.cells - p.cells),
+    get small() { return this.areas.filter((r) => r.type === TOO_SMALL).length; },
+    get faint() { return this.areas.filter((r) => r.type === TOO_FAINT).length; },
   };
 }
 

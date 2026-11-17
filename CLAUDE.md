@@ -19,7 +19,7 @@ A small, static web app: drop slides (images, PDF, a Google Slides link) or a sc
 - `app.js`: input (drop, paste, file, PDF, links + `#src=` hash), state (localStorage under `backrow:`), seat map, cards, drag-to-pan, thumbnails, calibration.
 
 ## The model
-- Scenes are drawn life size for the user sitting `USER_DISTANCE` (60 cm) from their own screen, using px-per-mm from the credit-card calibration (default 4.2). Call mode fits the device in the card by default; room mode opens in the normal view (about 70 degrees across). The expand button switches to actual size. The top-right pill uses plain words only: "Normal view", "Shrunk to fit" or "Actual size" (no percentages or jargon).
+- Scenes are drawn life size for the user sitting `USER_DISTANCE` (60 cm) from their own screen, using px-per-mm from the credit-card calibration (default 4.2). Call mode fits the device in the card by default; room mode opens in the normal view (about 70 degrees across). There is no actual-size mode and no top-right label (the owner found both unhelpful). The bottom-right button opens the scene card full screen, falling back to filling the window (`.scene-card.max`) where full screen is refused or missing.
 - Readable: capital letter (0.7 x font size) covers 10 arcmin, times the light factor in rooms. Calls also need about 10px font at the received resolution.
 - Google Slides links are fetched as `/export/pdf` without cookies; this works (CORS allowed) for decks shared with "Anyone with the link".
 
@@ -32,3 +32,8 @@ Serve locally (`python -m http.server`) or use the Pages URL, click "Try a sampl
 - Screens are mounted on the stage (`center` is above the front floor), and the floor rises `RAKE` 0.12 m a row. Rows are 0.9 m apart, starting 3 m from the screen; the default screen is 240". The row just ahead leans out of your sight line and the head two rows ahead sits in it. From the back rows, that head covers roughly the bottom 12-18% of the screen; nearer rows see it all. Check with a quick node script before changing RAKE or the screen heights.
 - The front row is 3 m back (`FIRST_ROW`). The room view opens in the natural view (about 70 degrees across, `fitRoom`, default on). The expand button switches to life size.
 - The seating plan is a map bigger than the panel: drag to pan (a drag never picks a seat), and it centres on your seat when the Seat tab opens.
+
+## Fixes panel (v9)
+- The first side tab is **Fixes** (badge = number of problem parts). `renderVerdict()` builds it: a headline, the smallest readable text **in points for the app the slide came from** (`slidePoints()`: a PDF page's own width in points, so 960 pt for PowerPoint or 720 pt for Google Slides; a 16:9 image is assumed to be PowerPoint), then problems grouped by type, each with one plain fix sentence and crops of where it happens (`areaCrop()`, located as "Top left" and so on), then context advice (cut words, label charts, contrast in a bright room, keep the bottom clear from the back, zoom before sharing, test on a phone).
+- `analyze()` returns `areas` (boxes in grid cells; `mergeNear()` joins pieces of the same line) plus `small`/`faint` counts.
+- Write all UI copy in plain words: no px/pt jargon without saying what it means, and no percentages of "life size".
