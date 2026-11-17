@@ -47,7 +47,7 @@ function perceive(img, eyeWidth, w, h) {
 
 // Joins areas on the same line of text (up to 5 cells apart across, touching
 // up and down) so a line counts once.
-function mergeNear(list) {
+export function mergeNear(list) {
   let merged = true;
   while (merged) {
     merged = false;
@@ -73,7 +73,7 @@ function mergeNear(list) {
 
 // Counts problem areas, treating cells up to two apart as one area so a line of
 // text counts once rather than once per gap between words.
-function findRegions(grid, cols, rows, type) {
+export function findRegions(grid, cols, rows, type) {
   const seen = new Uint8Array(grid.length);
   const regions = [];
   for (let i = 0; i < grid.length; i++) {
