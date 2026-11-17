@@ -42,7 +42,7 @@ const state = {
   slides: [],
   idx: 0,
   mode: store.get('mode', 'room'),
-  screen: store.get('screen', 'proj100'),
+  screen: store.get('screen', 'proj300'),
   seatRow: Number(store.get('seatRow', 5)),
   seatCol: Number(store.get('seatCol', 13)),
   light: store.get('light', 'bright'),
@@ -67,6 +67,11 @@ if (!byId(DEVICES, state.device)) state.device = 'laptop';
 if (!byId(LAYOUTS, state.layout)) state.layout = 'speaker';
 if (!byId(RECEIVED, state.recv)) state.recv = '720';
 if (!byId(SCALES, state.scale)) state.scale = 'auto';
+// v7: the theater's default screen is 300", three times the old 100" default.
+if (store.get('defaults', 0) < 7) {
+  if (state.screen === 'proj100') state.screen = 'proj300';
+  store.set('defaults', 7);
+}
 if (!['result', 'where', 'setup', 'slides'].includes(state.tab)) state.tab = 'where';
 if (!(Number.isInteger(state.seatRow) && state.seatRow >= 0 && state.seatRow < ROWS)) state.seatRow = 5;
 if (!(Number.isInteger(state.seatCol) && state.seatCol >= 0 && state.seatCol < SEATS_PER_ROW)) state.seatCol = 13;
